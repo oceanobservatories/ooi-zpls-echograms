@@ -3,18 +3,25 @@ channels:
   - conda-forge
   - nodefaults
 dependencies:
-  - python==3.10
+  - python=3.12
   - argcomplete
   - bottleneck
   - cmocean
   - conda-build
-  - echopype>=0.8.1
+  - dask=2025.5.1
+  - echopype=0.10.1
   - h5netcdf
+  - hvplot
+  - ipykernel
+  - ipywidgets
+  - libnetcdf
   - matplotlib
+  - netcdf4
   - numpy
-  - pandas
+  - pandas=2.3.1
   - pillow
   - pip
   - python-dateutil
+  - python-wget
   - tqdm
   - xarray
