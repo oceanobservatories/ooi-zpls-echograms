@@ -288,9 +288,9 @@ def set_file_name(site, dates):
     Create the file name for the echogram based on the mooring site name,
     and the date range plotted.
 
-    :param site: mooring site name
-    :param dates: date range shown in the plot
-    :return: file name as a string created from the inputs
+    :param site: mooring site name.
+    :param dates: date range shown in the plot.
+    :return: file name as a string created from the inputs.
     """
     file_name = site + '_Bioacoustic_Echogram_' + dates[0] + '-' + dates[1] + '_Calibrated_Sv'
     return file_name
@@ -301,8 +301,8 @@ def ax_config(ax, frequency):
     Configure axis elements for the echogram, setting title, date formatting
     and direction of the y-axis
 
-    :param ax: graphics handle to the axis object
-    :param frequency: acoustic frequency of the data plotted in this axis
+    :param ax: graphics handle to the axis object.
+    :param frequency: acoustic frequency of the data plotted in this axis.
     :return None:
     """
     title = '%.0f kHz' % (frequency / 1000)
@@ -321,16 +321,16 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     Generates and saves to disk an echogram of the acoustic volume backscatter
     for each of the frequencies.
 
-    :param data: xarray dataset containing the acoustic volume backscatter data
-    :param site: 8 letter OOI code (e.g. CP01CNSM) name of the mooring
-    :param long_name: Full descriptive name of the mooring
-    :param deployed_depth: nominal instrument depth in meters
-    :param output_directory: directory to save the echogram plot to
-    :param file_name: file name to use for the echogram
-    :param dates: date range to plot, sets the x-axis
-    :param vertical_range: vertical range to plot, sets the y-axis
-    :param colorbar_range: colorbar range to plot, sets the colormap
-    :return None: generates and saves an echogram to disk
+    :param data: xarray dataset containing the acoustic volume backscatter data.
+    :param site: 8 letter OOI code (e.g. CP01CNSM) name of the mooring.
+    :param long_name: Full descriptive name of the mooring.
+    :param deployed_depth: nominal instrument depth in meters.
+    :param output_directory: directory to save the echogram plot to.
+    :param file_name: file name to use for the echogram.
+    :param dates: date range to plot, sets the x-axis.
+    :param vertical_range: vertical range to plot, sets the y-axis.
+    :param colorbar_range: colorbar range to plot, sets the colormap.
+    :return None: generates and saves an echogram to disk.
     """
     # setup defaults based on inputs
     frequency_list = data.frequency_nominal.values
@@ -413,8 +413,8 @@ def range_correction(data, tilt_correction):
     correction value instead of the instrument's measured tilt/roll values.
     Adjusts the echo_range variable in the xarray object directly.
 
-    :param data: xarray dataset with the calculated range
-    :param tilt_correction: tilt correction value in degrees to use
+    :param data: xarray dataset with the calculated range.
+    :param tilt_correction: tilt correction value in degrees to use.
     """
     data['echo_range'] = data.echo_range * np.cos(np.deg2rad(tilt_correction))
 
@@ -424,9 +424,9 @@ def azfp_file_list(data_directory, dates):
     Generate a list of file paths pointing to the .01A files from an AZFP that
     contain the dates the user has requested.
 
-    :param data_directory: path to directory with the AZFP .01A files
-    :param dates: starting and ending dates to use in generating the file list
-    :return: the list of potential .01A file names, including full path
+    :param data_directory: path to directory with the AZFP .01A files.
+    :param dates: starting and ending dates to use in generating the file list.
+    :return: the list of potential .01A file names, including full path.
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -454,9 +454,9 @@ def ek_file_list(data_directory, dates):
     Generate a list of file paths pointing to the .raw files from an EK60 or
     EK80 that contain the dates the user has requested.
 
-    :param data_directory: path to directory with the EK60/EK80 .raw files
-    :param dates: starting and ending dates to use in generating the file list
-    :return: the .raw file names, including full path
+    :param data_directory: path to directory with the EK60/EK80 .raw files.
+    :param dates: starting and ending dates to use in generating the file list.
+    :return: the .raw file names, including full path.
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -565,18 +565,18 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     create a parallel processing method to speed up the conversion and
     processing of the raw sonar data files.
 
-    :param file: Individual raw sonar data file to process and convert
-    :param site: Site name where the data was collected
-    :param output_directory: Output directory to save the results
-    :param zpls_model: Model of bioacoustic sonar sensor used
+    :param file: Individual raw sonar data file to process and convert.
+    :param site: Site name where the data was collected.
+    :param output_directory: Output directory to save the results.
+    :param zpls_model: Model of bioacoustic sonar sensor used.
     :param xml_file: If the model is an AZFP, the XML file (with instrument
         calibration coefficients needed for the conversion) must also be
-        specified (usually just one per deployment)
+        specified (usually just one per deployment).
     :param tilt_correction: Tilt of the sonar transducers (typically 15
         degrees for the uncabled sensors to avoid interference from the
-        riser elements)
+        riser elements).
     :return: Converted and processed bioacoustic sonar data in a xarray
-        dataset object
+        dataset object.
     """
     # convert and process the raw files using echopype
     env_params = {
@@ -607,9 +607,6 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     else:
         ds['Platform']['platform_type'] = 'Mooring'   # ICES platform class 48
 
-    # save the data to a NetCDF file (will automatically skip if already created)
-    ds.to_netcdf(Path(output_directory))
-
     # process the data, calculating the volume acoustic backscatter strength and the vertical range
     waveform = []  # default for the AZFP and EK60
     encode = []    # default for the AZFP and EK60
@@ -620,7 +617,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
         try:
             ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
         except Exception as e:
-            # unit might be running in broadband mode, try changing the configuration...
+            print(f'Unit might be running in broadband mode (error: {e}), changing the configuration')
             try:
                 waveform = 'BB'
                 encode = 'complex'
@@ -629,6 +626,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
                 print(f'Error processing file (unknown configuration): {file}, error message: {e}.')
                 return None
     else:
+        # the AZFP and EK60 are narrowband
         ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
 
     # Correct reversed ping times
@@ -645,6 +643,14 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
 
     # extract the Sv, range and depth data
     data = ds_sv[['Sv', 'echo_range', 'depth']]
+
+    # save the data to NetCDF or Zarr files (will automatically skip if already created)
+    if zpls_model == 'AZFP':
+        ds.to_netcdf(Path(output_directory))
+    else:
+        ds.to_zarr(Path(output_directory), overwrite=False)
+
+    # clear the echodata objects from memory
     del ds, ds_sv
 
     # rework the extracted dataset to make it easier to work with in further processing
@@ -669,8 +675,8 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     """
     Main processing function to convert and process data from either the ASL
     AZFP or the Kongsberg Simrad EK60/EK80. Uses echopype to convert the raw
-    data files (saving the converted data in NetCDF files that conform to the
-    SONAR-NetCDF4 ICES convention) and then further processes the data by
+    data files (saving the converted data in NetCDF or Zarr files that conform
+    to the SONAR-NetCDF4 ICES convention). Further processes the data by
     applying instrument calibration coefficients to calculate the volume
     acoustic backscatter strength (Sv re 1-m). Processed data is saved to
     daily files at full resolution and then temporally averaged to create
@@ -693,7 +699,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :kwargs deployed_depth: Deployment depth of the instrument
     :kwargs vertical_range: Vertical range to use in setting the extent of the
         y-axis in the echogram plots
-    :kwargs colorbar_range: Volume acoustic backscattering strength range to
+    :kwargs colorbar_range: Volume acoustic backscatter strength range to
         use for the colorbar
     """
     # assign the keyword arguments (defaults to None of not set)
@@ -822,7 +828,7 @@ def main(argv=None):
                         help=('Date range to plot as either YYYYMM or YYYYMMDD. Specifying an end date is optional, '
                               'it will be assumed to be 1 month or 1 day depending on input.'))
     parser.add_argument('-zm', '--zpls_model', dest='zpls_model', type=str, required=True,
-                        help='Specifies the ZPLS instrument model, either AZFP or EK60.')
+                        help='Specifies the ZPLS instrument model, either AZFP, EK60 or EK80.')
     parser.add_argument('-xf', '--xml_file', dest='xml_file', type=str, required=False,
                         help='The path to .XML file used to process the AZFP data in the .01A files')
     parser.add_argument('-tc', '--tilt_correction', dest='tilt_correction', type=int, required=False,
