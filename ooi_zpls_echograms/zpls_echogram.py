@@ -10,20 +10,20 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 import os
-import warnings
-
 import pandas as pd
+import re
+import warnings
 import xarray as xr
 
 from calendar import monthrange
-from dask import compute, delayed
 from datetime import datetime, date, timedelta
 from echopype.qc import exist_reversed_time, coerce_increasing_time
 from importlib.resources import files
 from pandas.plotting import register_matplotlib_converters
 from pathlib import Path
 from PIL import Image
-from tqdm.dask import TqdmCallback
+from tqdm.auto import tqdm
+from typing import List, Tuple
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -478,6 +478,65 @@ def ek_file_list(data_directory, dates):
     return file_list
 
 
+def classify_recording_mode(filepaths: List[str], threshold_minutes: float = 30) -> List[Tuple[str, str]]:
+    """
+    Classify files as broadband or narrowband based on time gaps between
+    consecutive recordings. Note, this is somewhat crude, but faster than
+    opening the files via echopype.
+
+    Parameters
+    ----------
+    filepaths : list of str
+        List of file paths containing datetime strings in format
+        'D{YYYYMMDD}-T{HHMMSS}'.
+    threshold_minutes : float, optional
+        Time threshold in minutes to distinguish between broadband (shorter
+        gaps) and narrowband (longer gaps). Default is 30 minutes.
+
+    Returns
+    -------
+    list of tuple
+        List of (filepath, mode) tuples where mode is either 'broadband' or
+        'narrowband'.
+
+    Notes
+    -----
+    The last file in a sorted sequence is classified based on the gap before
+    it. If only one file exists, it's classified as 'unknown'.
+    """
+    if not filepaths:
+        return []
+
+    # Extract datetime and sort files chronologically
+    file_times = []
+    for filepath in filepaths:
+        match = re.search(r"D(\d{8})-T(\d{6})", filepath)
+        if not match:
+            continue
+        dt_str = f"{match.group(1)}{match.group(2)}"
+        dt = datetime.strptime(dt_str, "%Y%m%d%H%M%S")
+        file_times.append((filepath, dt))
+
+    file_times.sort(key=lambda x: x[1])
+
+    if len(file_times) == 1:
+        return [(file_times[0][0], "unknown")]
+
+    # Classify based on time gap to next file
+    results = []
+    for i in range(len(file_times) - 1):
+        gap_minutes = (file_times[i + 1][1] - file_times[i][1]).total_seconds() / 60
+        mode = "broadband" if gap_minutes < threshold_minutes else "narrowband"
+        results.append((file_times[i][0], mode))
+
+    # Last file uses the gap before it
+    last_gap = (file_times[-1][1] - file_times[-2][1]).total_seconds() / 60
+    last_mode = "broadband" if last_gap < threshold_minutes else "narrowband"
+    results.append((file_times[-1][0], last_mode))
+
+    return results
+
+
 def process_sonar_data(site, data_directory, output_directory, dates, zpls_model, xml_file, tilt_correction):
     """
     Use echopype to convert and process the raw bioacoustic sonar data from
@@ -519,12 +578,16 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     # sort the file list alphanumerically
     file_list.sort()
 
-    # convert and process the raw files using echopype
-    delayed_tasks = [delayed(_process_file)(file, site, output_directory, zpls_model, xml_file, tilt_correction)
-                     for file in file_list]
-    with TqdmCallback(desc=f'Converting the {len(file_list)} raw {zpls_model} data files'):
-        echo = compute(*delayed_tasks, scheduler='threads', num_workers=4)
+    # Classify files (for now skip files believed to be recorded in broadband mode)
+    classifications = classify_recording_mode(file_list, threshold_minutes=30)
+    file_list = [file for file, mode in classifications if mode == "narrowband"]
+    if not file_list:
+        return None
 
+    # Use a list comprehension with a tqdm progress bar to process the files sequentially
+    desc = f'Converting and processing {len(file_list)} raw {zpls_model} data files'
+    echo = [_process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction)
+            for file in tqdm(file_list, desc=desc)]
     echo = [i for i in echo if i is not None]
     if not echo:
         # if no files were processed, exit cleanly
@@ -540,11 +603,6 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
             single_ds['nominal_depth'] = single_ds['nominal_depth'].sel(ping_time=single_ds.ping_time[0], drop=True)
 
     del echo
-
-    # manual garbage collection; echopype seems to leave a lot of detritus behind it
-    n = 1
-    while n > 0:
-        n = gc.collect()
 
     # sort the data by the time and make sure the time index is unique
     sorted_ds = single_ds.sortby('ping_time')
@@ -594,7 +652,7 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
         else:
             ds = ep.open_raw(file, sonar_model=zpls_model)
     except Exception as e:
-        print('Error ''%s'' converting file: %s' % (e, file))
+        print(f'Error ({e}) converting file: {file}')
         return None
 
     # add ICES metadata attributes
@@ -611,20 +669,20 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     waveform = []  # default for the AZFP and EK60
     encode = []    # default for the AZFP and EK60
     if zpls_model == 'EK80':
-        # setting as defaults for the EK80, but may require resetting
+        # setting as defaults for the EK80 (note, this only support narrowband processing at this time)
         waveform = 'CW'
         encode = 'power'
         try:
             ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
         except Exception as e:
-            print(f'Unit might be running in broadband mode (error: {e}), changing the configuration')
-            try:
-                waveform = 'BB'
-                encode = 'complex'
-                ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
-            except Exception as e:
-                print(f'Error processing file (unknown configuration): {file}, error message: {e}.')
-                return None
+            print(f'Unit might be running in broadband mode (error: {e}), end processing.')
+            # manual garbage collection; echopype seems to leave a lot of detritus behind it
+            del ds
+            n = 1
+            while n > 0:
+                n = gc.collect()
+
+            return None
     else:
         # the AZFP and EK60 are narrowband
         ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
@@ -634,24 +692,30 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
         # Coerce increasing time
         coerce_increasing_time(ds_sv)
 
-    # calculate the depth from the range and convert the channel dimension to frequency
+    # calculate the depth from the range
     ds_sv = ep.consolidate.add_depth(ds_sv, ds, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
-    ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
 
     # add the split-beam angle
     ds_sv = ep.consolidate.add_splitbeam_angle(ds_sv, ds, waveform_mode=waveform, encode_mode=encode, to_disk=False)
 
+    # convert the channel dimension to frequency
+    ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
+
     # extract the Sv, range and depth data
     data = ds_sv[['Sv', 'echo_range', 'depth']]
 
-    # save the data to NetCDF or Zarr files (will automatically skip if already created)
-    if zpls_model == 'AZFP':
-        ds.to_netcdf(Path(output_directory))
-    else:
+    # save the data to disk (will automatically skip if already created)
+    if zpls_model == 'EK80':
+        # output the files to Zarr (while larger than the NetCDF, faster for the EK80 files)
         ds.to_zarr(Path(output_directory), overwrite=False)
+    else:
+        ds.to_netcdf(Path(output_directory), overwrite=False)
 
-    # clear the echodata objects from memory
+    # clear the echodata objects from memory and clean up after echopype
     del ds, ds_sv
+    n = 1
+    while n > 0:
+        n = gc.collect()
 
     # rework the extracted dataset to make it easier to work with in further processing
     # --- convert range to a coordinate
@@ -726,8 +790,9 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
 
     # test to see if we have any data from the processing
     if not data:
-        raise SystemExit('No data files were converted and processed. Check input settings, in particular the path '
-                         'to the raw data files for dates between %s and %s.' % (dates[0], dates[1]))
+        print(f'No data files were converted and processed. Check input settings, in particular the path to the raw '
+              f'data files (or whether these were broadband files) for dates between {dates[0]} and {dates[1]}.')
+        return None
 
     # save the full resolution processed data to daily NetCDF files
     file_name = set_file_name(site, dates)
