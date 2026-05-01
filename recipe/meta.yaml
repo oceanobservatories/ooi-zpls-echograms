@@ -1,0 +1,62 @@
+{% set name = "ooi-zpls-echograms" %}
+{% set version = load_file_data('../VERSION.txt').strip() %}
+
+package:
+  name: {{ name|lower }}
+  version: {{ version }}
+
+source:
+  url: https://pypi.io/packages/source/{{ name[0] }}/{{ name }}/{{ name.replace('-', '_') }}-{{ version }}.tar.gz
+  # sha256: <will be generated when published to PyPI>
+
+build:
+  noarch: python
+  number: 0
+  script: {{ PYTHON }} -m pip install . -vv --no-deps --no-build-isolation
+  entry_points:
+    - zpls-echogram = ooi_zpls_echograms.zpls_echogram:main
+
+requirements:
+  host:
+    - python >=3.10
+    - pip
+    - setuptools >=61.0
+    - wheel
+  run:
+    - python >=3.10
+    - bottleneck
+    - cmocean
+    - dask
+    - echopype ==0.10.1
+    - h5netcdf
+    - matplotlib-base
+    - numpy
+    - pandas >=2.0,<3.0
+    - pillow
+    - python-dateutil
+    - tqdm
+    - xarray
+
+test:
+  imports:
+    - ooi_zpls_echograms
+  commands:
+    - zpls-echogram --help
+
+about:
+  home: https://github.com/oceanobservatories/ooi-zpls-echograms
+  summary: Convert OOI ocean sonar data into processed NetCDF files and echogram plots using echopype
+  description: |
+    Convert the raw data files from the OOI ocean sonar systems (AZFP and EK60/EK80)
+    into processed NetCDF files and echogram plots using the open source echopype
+    package to facilitate user access to, and exploration of, the bio-acoustic data
+    collected across the multiple OOI arrays.
+  license: MIT
+  license_family: MIT
+  license_file: LICENSE.txt
+  doc_url: https://github.com/oceanobservatories/ooi-zpls-echograms
+  dev_url: https://github.com/oceanobservatories/ooi-zpls-echograms
+
+extra:
+  recipe-maintainers:
+    - cwingard

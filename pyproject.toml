@@ -1,0 +1,67 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ooi-zpls-echograms"
+dynamic = ["version"]
+description = "Convert the raw data files from the OOI ocean sonar systems into processed NetCDF files and echogram plots (using the open source echopype package) to facilitate user access to, and exploration of, the bio-acoustic data collected across the multiple OOI arrays."
+readme = "README.md"
+license = {text = "MIT"}
+authors = [
+    {name = "Ocean Observatories Initiative", email = "helpdesk@oceanobservatories.org"}
+]
+keywords = [
+    "OOI",
+    "Cabled",
+    "Endurance",
+    "Global",
+    "Pioneer",
+    "zooplankton",
+    "echogram",
+    "acoustic",
+    "sonar",
+    "ocean"
+]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Scientific/Engineering :: Oceanography",
+]
+requires-python = ">=3.10"
+dependencies = [
+    "bottleneck",
+    "cmocean",
+    "dask",
+    "echopype ==0.10.1",
+    "h5netcdf",
+    "matplotlib",
+    "numpy",
+    "pandas >=2.0,<3.0",
+    "pillow",
+    "python-dateutil",
+    "tqdm",
+    "xarray",
+]
+
+[project.urls]
+Homepage = "https://github.com/oceanobservatories/ooi-zpls-echograms"
+Repository = "https://github.com/oceanobservatories/ooi-zpls-echograms"
+Issues = "https://github.com/oceanobservatories/ooi-zpls-echograms/issues"
+
+[project.scripts]
+zpls-echogram = "ooi_zpls_echograms.zpls_echogram:main"
+
+[tool.setuptools]
+packages = ["ooi_zpls_echograms"]
+include-package-data = true
+
+[tool.setuptools.dynamic]
+version = {file = "VERSION.txt"}
+
+[tool.setuptools.package-data]
+ooi_zpls_echograms = ["*.png"]

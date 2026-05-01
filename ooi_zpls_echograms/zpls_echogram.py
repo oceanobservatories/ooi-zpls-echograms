@@ -10,16 +10,20 @@ import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
 import os
+import pandas as pd
+import re
 import warnings
 import xarray as xr
 
 from calendar import monthrange
 from datetime import datetime, date, timedelta
+from echopype.qc import exist_reversed_time, coerce_increasing_time
 from importlib.resources import files
 from pandas.plotting import register_matplotlib_converters
 from pathlib import Path
 from PIL import Image
-from tqdm import tqdm
+from tqdm.auto import tqdm
+from typing import List, Tuple
 
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
@@ -40,7 +44,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Oregon Shelf Cabled Benthic Experiment Package',
         'tilt_correction': 0,
         'colorbar_range': [-90, -50],
-        'vertical_range': [0, 80],
+        'vertical_range': [0, 81],
         'deployed_depth': 81,
         'depth_offset': 2.0,
         'average_salinity': 33,
@@ -54,7 +58,7 @@ site_config = {
         'vertical_range': [0, 200],
         'deployed_depth': 200,
         'depth_offset': 0.0,
-        'average_salinity': 33,
+        'average_salinity': 34,
         'average_temperature': 9,
         'instrument_orientation': 'up'
     },
@@ -226,10 +230,10 @@ attributes = {
                     '(https://github.com/oceanobservatories/ooi-zpls-echograms)'),
         'project': 'Ocean Observatories Initiative',
         'acknowledgement': 'National Science Foundation',
-        'references': 'http://oceanobservatories.org',
+        'references': 'https://oceanobservatories.org',
         'creator_name': 'Ocean Observatories Initiative',
         'creator_email': 'helpdesk@oceanobservatories.org',
-        'creator_url': 'http://oceanobservatories.org',
+        'creator_url': 'https://oceanobservatories.org',
         'featureType': 'timeSeries',
         'cdm_data_type': 'Station',
         'Conventions': 'CF-1.7'
@@ -270,7 +274,7 @@ attributes = {
         'positive': 'up'
     },
     'Sv': {
-        'long_name': 'Volume Acoustic Backscattering Strength (Sv re 1 m-1)',
+        'long_name': 'Volume Acoustic Backscatter Strength (Sv re 1 m-1)',
         'units': 'dB ',
         'comments': ('Initial estimate of the volume acoustic backscatter strength derived from the raw instrument '
                      'data using echopype to convert and process the data.'),
@@ -284,9 +288,9 @@ def set_file_name(site, dates):
     Create the file name for the echogram based on the mooring site name,
     and the date range plotted.
 
-    :param site: mooring site name
-    :param dates: date range shown in the plot
-    :return: file name as a string created from the inputs
+    :param site: mooring site name.
+    :param dates: date range shown in the plot.
+    :return: file name as a string created from the inputs.
     """
     file_name = site + '_Bioacoustic_Echogram_' + dates[0] + '-' + dates[1] + '_Calibrated_Sv'
     return file_name
@@ -297,8 +301,8 @@ def ax_config(ax, frequency):
     Configure axis elements for the echogram, setting title, date formatting
     and direction of the y-axis
 
-    :param ax: graphics handle to the axis object
-    :param frequency: acoustic frequency of the data plotted in this axis
+    :param ax: graphics handle to the axis object.
+    :param frequency: acoustic frequency of the data plotted in this axis.
     :return None:
     """
     title = '%.0f kHz' % (frequency / 1000)
@@ -317,16 +321,16 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     Generates and saves to disk an echogram of the acoustic volume backscatter
     for each of the frequencies.
 
-    :param data: xarray dataset containing the acoustic volume backscatter data
-    :param site: 8 letter OOI code (e.g. CP01CNSM) name of the mooring
-    :param long_name: Full descriptive name of the mooring
-    :param deployed_depth: nominal instrument depth in meters
-    :param output_directory: directory to save the echogram plot to
-    :param file_name: file name to use for the echogram
-    :param dates: date range to plot, sets the x-axis
-    :param vertical_range: vertical range to plot, sets the y-axis
-    :param colorbar_range: colorbar range to plot, sets the colormap
-    :return None: generates and saves an echogram to disk
+    :param data: xarray dataset containing the acoustic volume backscatter data.
+    :param site: 8 letter OOI code (e.g. CP01CNSM) name of the mooring.
+    :param long_name: Full descriptive name of the mooring.
+    :param deployed_depth: nominal instrument depth in meters.
+    :param output_directory: directory to save the echogram plot to.
+    :param file_name: file name to use for the echogram.
+    :param dates: date range to plot, sets the x-axis.
+    :param vertical_range: vertical range to plot, sets the y-axis.
+    :param colorbar_range: colorbar range to plot, sets the colormap.
+    :return None: generates and saves an echogram to disk.
     """
     # setup defaults based on inputs
     frequency_list = data.frequency_nominal.values
@@ -409,8 +413,8 @@ def range_correction(data, tilt_correction):
     correction value instead of the instrument's measured tilt/roll values.
     Adjusts the echo_range variable in the xarray object directly.
 
-    :param data: xarray dataset with the calculated range
-    :param tilt_correction: tilt correction value in degrees to use
+    :param data: xarray dataset with the calculated range.
+    :param tilt_correction: tilt correction value in degrees to use.
     """
     data['echo_range'] = data.echo_range * np.cos(np.deg2rad(tilt_correction))
 
@@ -420,9 +424,9 @@ def azfp_file_list(data_directory, dates):
     Generate a list of file paths pointing to the .01A files from an AZFP that
     contain the dates the user has requested.
 
-    :param data_directory: path to directory with the AZFP .01A files
-    :param dates: starting and ending dates to use in generating the file list
-    :return: list of potential .01A file names, including full path
+    :param data_directory: path to directory with the AZFP .01A files.
+    :param dates: starting and ending dates to use in generating the file list.
+    :return: the list of potential .01A file names, including full path.
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -445,14 +449,14 @@ def azfp_file_list(data_directory, dates):
     return file_list
 
 
-def ek60_file_list(data_directory, dates):
+def ek_file_list(data_directory, dates):
     """
-    Generate a list of file paths pointing to the .raw files from an EK60 that
-    contain the dates the user has requested.
+    Generate a list of file paths pointing to the .raw files from an EK60 or
+    EK80 that contain the dates the user has requested.
 
-    :param data_directory: path to directory with the EK60 .raw files
-    :param dates: starting and ending dates to use in generating the file list
-    :return: list of potential .raw file names, including full path
+    :param data_directory: path to directory with the EK60/EK80 .raw files.
+    :param dates: starting and ending dates to use in generating the file list.
+    :return: the .raw file names, including full path.
     """
     if len(dates) == 1:
         dates += [dates[0]]
@@ -468,43 +472,102 @@ def ek60_file_list(data_directory, dates):
     file_list = []
     for i in range(delta.days + 1):
         day = sdate + timedelta(days=i)
-        ek60_files = glob.glob(os.path.join(data_directory, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
-        file_list.append(ek60_files)
+        ek_files = glob.glob(os.path.join(data_directory, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
+        file_list.append(ek_files)
 
     return file_list
+
+
+def classify_recording_mode(filepaths: List[str], threshold_minutes: float = 30) -> List[Tuple[str, str]]:
+    """
+    Classify files as broadband or narrowband based on time gaps between
+    consecutive recordings. Note, this is somewhat crude, but faster than
+    opening the files via echopype.
+
+    Parameters
+    ----------
+    filepaths : list of str
+        List of file paths containing datetime strings in format
+        'D{YYYYMMDD}-T{HHMMSS}'.
+    threshold_minutes : float, optional
+        Time threshold in minutes to distinguish between broadband (shorter
+        gaps) and narrowband (longer gaps). Default is 30 minutes.
+
+    Returns
+    -------
+    list of tuple
+        List of (filepath, mode) tuples where mode is either 'broadband' or
+        'narrowband'.
+
+    Notes
+    -----
+    The last file in a sorted sequence is classified based on the gap before
+    it. If only one file exists, it's classified as 'unknown'.
+    """
+    if not filepaths:
+        return []
+
+    # Extract datetime and sort files chronologically
+    file_times = []
+    for filepath in filepaths:
+        match = re.search(r"D(\d{8})-T(\d{6})", filepath)
+        if not match:
+            continue
+        dt_str = f"{match.group(1)}{match.group(2)}"
+        dt = datetime.strptime(dt_str, "%Y%m%d%H%M%S")
+        file_times.append((filepath, dt))
+
+    file_times.sort(key=lambda x: x[1])
+
+    if len(file_times) == 1:
+        return [(file_times[0][0], "unknown")]
+
+    # Classify based on time gap to next file
+    results = []
+    for i in range(len(file_times) - 1):
+        gap_minutes = (file_times[i + 1][1] - file_times[i][1]).total_seconds() / 60
+        mode = "broadband" if gap_minutes < threshold_minutes else "narrowband"
+        results.append((file_times[i][0], mode))
+
+    # Last file uses the gap before it
+    last_gap = (file_times[-1][1] - file_times[-2][1]).total_seconds() / 60
+    last_mode = "broadband" if last_gap < threshold_minutes else "narrowband"
+    results.append((file_times[-1][0], last_mode))
+
+    return results
 
 
 def process_sonar_data(site, data_directory, output_directory, dates, zpls_model, xml_file, tilt_correction):
     """
     Use echopype to convert and process the raw bioacoustic sonar data from
-    either an AZFP (in *.01A files), or an EK60 (in *.raw files) as the first
-    step in the process of generating daily and averaged processed NetCDF files
-    and echograms for use by the community.
+    either an AZFP (in *.01A files), or an EK60/EK80 (in *.raw files) as the
+    first step in the process of generating daily and averaged processed
+    NetCDF files and echograms for use by the community.
 
-    :param site: Site name where the data was collected
+    :param site: Site name where the data was collected.
     :param data_directory: Source directory where the raw data files are
         located (assumes a standardized file structure will be followed by the
-        OOI operators)
+        OOI operators).
     :param output_directory: Output directory to save the results
     :param dates: Starting and ending dates to search for raw data files in the
-        data directory to convert and process
-    :param zpls_model: Model of bioacoustic sonar sensor used
-    :param xml_file: If the model is an AZFP, the xml_file (with instrument
+        data directory to convert and process.
+    :param zpls_model: Model of bioacoustic sonar sensor used.
+    :param xml_file: If the model is an AZFP, the XML file (with instrument
         calibration coefficients needed for the conversion) must also be
-        specified (usually just one per deployment)
+        specified (usually just one per deployment).
     :param tilt_correction: Tilt of the sonar transducers (typically 15
-        degrees for the uncabled sensors to avoid interference from the
-        riser elements)
+        degrees for the uncabled sensors to minimize interference from the
+        riser elements).
     :return: Converted and processed bioacoustic sonar data in a xarray
         dataset object for the date range indicated by the dates input,
         with the object sorted in time and checked to make sure the time
-        record is monotonic
+        record is monotonic.
     """
     # generate a list of data files given the input dates
     if zpls_model == 'AZFP':
         file_list = azfp_file_list(data_directory, dates)
     else:
-        file_list = ek60_file_list(data_directory, dates)
+        file_list = ek_file_list(data_directory, dates)
 
     # reset the file_list to a single index
     file_list = [file for sub in file_list for file in sub]
@@ -515,10 +578,20 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     # sort the file list alphanumerically
     file_list.sort()
 
-    # convert and process the raw files using echopype
-    desc = 'Converting and processing %d raw %s data files' % (len(file_list), zpls_model)
+    # Classify files (for now skip files believed to be recorded in broadband mode)
+    classifications = classify_recording_mode(file_list, threshold_minutes=30)
+    file_list = [file for file, mode in classifications if mode == "narrowband"]
+    if not file_list:
+        return None
+
+    # Use a list comprehension with a tqdm progress bar to process the files sequentially
+    desc = f'Converting and processing {len(file_list)} raw {zpls_model} data files'
     echo = [_process_file(file, site, output_directory, zpls_model, xml_file, tilt_correction)
             for file in tqdm(file_list, desc=desc)]
+    echo = [i for i in echo if i is not None]
+    if not echo:
+        # if no files were processed, exit cleanly
+        return None
 
     # concatenate the data into a single dataset
     try:
@@ -530,11 +603,6 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
             single_ds['nominal_depth'] = single_ds['nominal_depth'].sel(ping_time=single_ds.ping_time[0], drop=True)
 
     del echo
-
-    # manual garbage collection; echopype seems to leave a lot of detritus behind it
-    n = 1
-    while n > 0:
-        n = gc.collect()
 
     # sort the data by the time and make sure the time index is unique
     sorted_ds = single_ds.sortby('ping_time')
@@ -555,18 +623,18 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     create a parallel processing method to speed up the conversion and
     processing of the raw sonar data files.
 
-    :param file: Individual raw sonar data file to process and convert
-    :param site: Site name where the data was collected
-    :param output_directory: Output directory to save the results
-    :param zpls_model: Model of bioacoustic sonar sensor used
-    :param xml_file: If the model is an AZFP, the xml_file (with instrument
+    :param file: Individual raw sonar data file to process and convert.
+    :param site: Site name where the data was collected.
+    :param output_directory: Output directory to save the results.
+    :param zpls_model: Model of bioacoustic sonar sensor used.
+    :param xml_file: If the model is an AZFP, the XML file (with instrument
         calibration coefficients needed for the conversion) must also be
-        specified (usually just one per deployment)
+        specified (usually just one per deployment).
     :param tilt_correction: Tilt of the sonar transducers (typically 15
         degrees for the uncabled sensors to avoid interference from the
-        riser elements)
+        riser elements).
     :return: Converted and processed bioacoustic sonar data in a xarray
-        dataset object
+        dataset object.
     """
     # convert and process the raw files using echopype
     env_params = {
@@ -578,10 +646,14 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     downward = site_config[site]['instrument_orientation'] == 'down'  # instrument orientation
 
     # load the raw file, creating a xarray dataset object
-    if zpls_model == 'AZFP':
-        ds = ep.open_raw(file, sonar_model=zpls_model, xml_path=xml_file)
-    else:
-        ds = ep.open_raw(file, sonar_model=zpls_model)
+    try:
+        if zpls_model == 'AZFP':
+            ds = ep.open_raw(file, sonar_model=zpls_model, xml_path=xml_file)
+        else:
+            ds = ep.open_raw(file, sonar_model=zpls_model)
+    except Exception as e:
+        print(f'Error ({e}) converting file: {file}')
+        return None
 
     # add ICES metadata attributes
     ds['Platform']['platform_name'] = site  # OOI site name
@@ -593,17 +665,57 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     else:
         ds['Platform']['platform_type'] = 'Mooring'   # ICES platform class 48
 
-    # save the data to a NetCDF file (will automatically skip if already created)
-    ds.to_netcdf(Path(output_directory))
-
     # process the data, calculating the volume acoustic backscatter strength and the vertical range
-    ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)  # calculate Sv
+    waveform = []  # default for the AZFP and EK60
+    encode = []    # default for the AZFP and EK60
+    if zpls_model == 'EK80':
+        # setting as defaults for the EK80 (note, this only support narrowband processing at this time)
+        waveform = 'CW'
+        encode = 'power'
+        try:
+            ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
+        except Exception as e:
+            print(f'Unit might be running in broadband mode (error: {e}), end processing.')
+            # manual garbage collection; echopype seems to leave a lot of detritus behind it
+            del ds
+            n = 1
+            while n > 0:
+                n = gc.collect()
 
-    # calculate the depth from the range and convert the channels dimension to frequency
-    ds_sv = ep.consolidate.add_depth(ds_sv, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
+            return None
+    else:
+        # the AZFP and EK60 are narrowband
+        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
+
+    # Correct reversed ping times
+    if exist_reversed_time(ds_sv, "ping_time"):
+        # Coerce increasing time
+        coerce_increasing_time(ds_sv)
+
+    # calculate the depth from the range
+    ds_sv = ep.consolidate.add_depth(ds_sv, ds, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
+
+    # add the split-beam angle
+    ds_sv = ep.consolidate.add_splitbeam_angle(ds_sv, ds, waveform_mode=waveform, encode_mode=encode, to_disk=False)
+
+    # convert the channel dimension to frequency
     ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
-    data = ds_sv[['Sv', 'echo_range', 'depth']]  # extract the Sv, range and depth data
+
+    # extract the Sv, range and depth data
+    data = ds_sv[['Sv', 'echo_range', 'depth']]
+
+    # save the data to disk (will automatically skip if already created)
+    if zpls_model == 'EK80':
+        # output the files to Zarr (while larger than the NetCDF, faster for the EK80 files)
+        ds.to_zarr(Path(output_directory), overwrite=False)
+    else:
+        ds.to_netcdf(Path(output_directory), overwrite=False)
+
+    # clear the echodata objects from memory and clean up after echopype
     del ds, ds_sv
+    n = 1
+    while n > 0:
+        n = gc.collect()
 
     # rework the extracted dataset to make it easier to work with in further processing
     # --- convert range to a coordinate
@@ -626,11 +738,11 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
 def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file, **kwargs):
     """
     Main processing function to convert and process data from either the ASL
-    AZFP or the Kongsberg Simrad EK60. Uses echopype to convert the raw data
-    files (saving the converted data in NetCDF files that conform to the
-    SONAR-NetCDF4 ICES convention) and then further processes the data by
+    AZFP or the Kongsberg Simrad EK60/EK80. Uses echopype to convert the raw
+    data files (saving the converted data in NetCDF or Zarr files that conform
+    to the SONAR-NetCDF4 ICES convention). Further processes the data by
     applying instrument calibration coefficients to calculate the volume
-    acoustic backscattering strength (Sv re 1-m). Processed data is saved to
+    acoustic backscatter strength (Sv re 1-m). Processed data is saved to
     daily files at full resolution and then temporally averaged to create
     echogram plots for the date range specified (averaged data is also saved).
 
@@ -642,7 +754,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :param dates: Starting and ending dates to search for raw data files in the
         data directory to convert and process
     :param zpls_model: Model of bioacoustic sonar sensor used
-    :param xml_file: If the model is an AZFP, the xml_file (with instrument
+    :param xml_file: If the model is an AZFP, the XML file (with instrument
         calibration coefficients needed for the conversion) must also be
         specified (usually just one per deployment)
     :kwargs tilt_correction: Tilt of the sonar transducers (typically 15
@@ -651,7 +763,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :kwargs deployed_depth: Deployment depth of the instrument
     :kwargs vertical_range: Vertical range to use in setting the extent of the
         y-axis in the echogram plots
-    :kwargs colorbar_range: Volume acoustic backscattering strength range to
+    :kwargs colorbar_range: Volume acoustic backscatter strength range to
         use for the colorbar
     """
     # assign the keyword arguments (defaults to None of not set)
@@ -665,21 +777,22 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     if not os.path.isdir(output_directory):
         os.makedirs(output_directory, exist_ok=True)
 
-    # determine if a xml_file has not been specified for AZFP data
+    # determine if an XML file has not been specified for AZFP data
     if zpls_model == 'AZFP' and not xml_file:
         raise ValueError('If the ZPLS model is AZFP, you must specify an XML file with the instrument '
                          'configuration and calibration parameters.')
 
     # convert and process the data
-    if zpls_model not in ['AZFP', 'EK60']:
-        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case sensitive)')
+    if zpls_model not in ['AZFP', 'EK60', 'EK80']:
+        raise ValueError('The ZPLS model must be set as either AZFP, EK60 or EK80 (case sensitive)')
     else:
         data = process_sonar_data(site, data_directory, output_directory, dates, zpls_model, xml_file, tilt_correction)
 
     # test to see if we have any data from the processing
     if not data:
-        raise SystemExit('No data files were converted and processed. Check input settings, in particular the path '
-                         'to the raw data files for dates between %s and %s.' % (dates[0], dates[1]))
+        print(f'No data files were converted and processed. Check input settings, in particular the path to the raw '
+              f'data files (or whether these were broadband files) for dates between {dates[0]} and {dates[1]}.')
+        return None
 
     # save the full resolution processed data to daily NetCDF files
     file_name = set_file_name(site, dates)
@@ -722,15 +835,18 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
 
     # if a global mooring, create hourly averaged data records, otherwise create 15-minute records
     if 'HYPM' in site:
-        # resample the data into a 60 minute, median averaged record, filling gaps less than 180 minutes
-        avg = data.resample(ping_time='60Min', skipna=True).median(dim='ping_time', keep_attrs=True)
+        # resample the data into a 60-minute averaged record, filling gaps less than 180 minutes
+        data['ping_time'] = data['ping_time'] + pd.to_timedelta(30, unit="min")
+        avg = data.resample(ping_time='60Min').mean(dim='ping_time', skipna=True, keep_attrs=True)
         avg = avg.interpolate_na(dim='ping_time', max_gap='180Min')
     else:
-        # resample the data into a 15 minute, median averaged record, filling gaps less than 45 minutes
-        avg = data.resample(ping_time='15Min', skipna=True).median(dim='ping_time', keep_attrs=True)
+        # resample the data into a 15-minute averaged record, filling gaps less than 45 minutes
+        data['ping_time'] = data['ping_time'] + pd.to_timedelta(450, unit="sec")
+        avg = data.resample(ping_time='15Min').mean(dim='ping_time', skipna=True, keep_attrs=True)
         avg = avg.interpolate_na(dim='ping_time', max_gap='45Min')
 
     # generate the echogram
+    avg = avg.compute()
     long_name = site_config[site]['long_name']
     generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates,
                       vertical_range=vertical_range, colorbar_range=colorbar_range)
@@ -777,7 +893,7 @@ def main(argv=None):
                         help=('Date range to plot as either YYYYMM or YYYYMMDD. Specifying an end date is optional, '
                               'it will be assumed to be 1 month or 1 day depending on input.'))
     parser.add_argument('-zm', '--zpls_model', dest='zpls_model', type=str, required=True,
-                        help='Specifies the ZPLS instrument model, either AZFP or EK60.')
+                        help='Specifies the ZPLS instrument model, either AZFP, EK60 or EK80.')
     parser.add_argument('-xf', '--xml_file', dest='xml_file', type=str, required=False,
                         help='The path to .XML file used to process the AZFP data in the .01A files')
     parser.add_argument('-tc', '--tilt_correction', dest='tilt_correction', type=int, required=False,
@@ -826,8 +942,8 @@ def main(argv=None):
         os.makedirs(output_directory, exist_ok=True)
 
     # convert and process the data
-    if zpls_model not in ['AZFP', 'EK60']:
-        raise ValueError('The ZPLS model must be set as either AZFP or EK60 (case sensitive)')
+    if zpls_model not in ['AZFP', 'EK60', 'EK80']:
+        raise ValueError('The ZPLS model must be set as either AZFP, EK60 or EK80 (case sensitive)')
     else:
         zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml_file,
                       deployed_depth=deployed_depth, tilt_correction=tilt_correction,
