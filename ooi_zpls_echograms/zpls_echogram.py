@@ -43,7 +43,7 @@ site_config = {
     'CE02SHBP': {
         'long_name': 'Coastal Endurance, Oregon Shelf Cabled Benthic Experiment Package',
         'tilt_correction': 0,
-        'colorbar_range': [-90, -50],
+        'colorbar_range': [-90, -40],
         'vertical_range': [0, 81],
         'deployed_depth': 81,
         'depth_offset': 2.0,
@@ -54,7 +54,7 @@ site_config = {
     'CE04OSPS': {
         'long_name': 'Coastal Endurance, Oregon Offshore Cabled Shallow Profiler Mooring',
         'tilt_correction': 0,
-        'colorbar_range': [-90, -50],
+        'colorbar_range': [-90, -40],
         'vertical_range': [0, 200],
         'deployed_depth': 200,
         'depth_offset': 0.0,
@@ -334,8 +334,8 @@ def set_file_name(site, dates):
 
 def ax_config(ax, frequency):
     """
-    Configure axis elements for the echogram, setting title, date formatting
-    and direction of the y-axis
+    Configure axis elements for the echogram: title, y-axis label and date
+    formatting of the x-axis.
 
     :param ax: graphics handle to the axis object.
     :param frequency: acoustic frequency of the data plotted in this axis.
@@ -441,6 +441,7 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     # save the echogram
     echogram_name = file_name + '.png'
     plt.savefig(os.path.join(output_directory, echogram_name), dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
 
 def range_correction(data, tilt_correction):
@@ -457,13 +458,17 @@ def range_correction(data, tilt_correction):
 
 def normalize_date_range(dates):
     """
-    Normalize the user-supplied date range into a (start, stop) pair of
-    YYYYMMDD strings, where stop is an exclusive upper bound (i.e. the
-    range covers [start, stop], matching the convention used by the
-    weekly batch scripts). Handles three input shapes:
+    Normalize the user-supplied date range into a [start, stop] pair of
+    YYYYMMDD strings, where stop is exclusive (the range runs up to, but
+    not including, stop), matching the convention used by the weekly
+    batch scripts. Handles three input shapes:
       - a single YYYYMMDD day        -> (day, day + 1)
       - a single YYYYMM month        -> (first-of-month, first-of-next-month)
-      - two explicit start/stop tokens (YYYYMMDD or YYYYMM), used as-is
+      - two tokens of the same length:
+          YYYYMMDD YYYYMMDD -> used as-is (stop exclusive)
+          YYYYMM   YYYYMM   -> (first of start month, first of the month
+                               after stop), so the stop month is included
+    Mixed-length tokens raise a ValueError.
 
     Idempotent: calling this again on an already-normalized pair is a no-op,
     so it is safe to call from multiple entry points.
@@ -476,6 +481,9 @@ def normalize_date_range(dates):
             dates = [dates[0], dates[0]]
         else:
             dates = [dates[0], (dparser.parse(dates[0]) + timedelta(days=1)).strftime('%Y%m%d')]
+
+    if len(dates[0]) != len(dates[1]) or len(dates[0]) not in (6, 8):
+        raise ValueError(f'Date range tokens must both be YYYYMMDD or both be YYYYMM, got {dates}')
 
     if len(dates[0]) == 6:
         dates[0] = dates[0] + '01'
@@ -726,9 +734,10 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     Processes one calendar day at a time rather than the whole requested
     date range at once: converts, writes that day's full-resolution NetCDF,
     resamples, and releases the full-resolution data from memory before
-    moving to the next day. Each day's resample pass includes a forward
-    buffer so the density of the final bin spanning midnight is computed
-    correctly rather than truncated.
+    moving to the next day. Each day's resample pass includes a backward
+    buffer so the first bin, which spans midnight, sees the previous day's
+    last pings, and a forward buffer so gap interpolation at the end of the
+    day has data on both sides.
 
     :param site: Site name where the data was collected.
     :param data_directory: Source directory where the raw data files are
@@ -808,8 +817,8 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
                 for f in tqdm(combined_files, desc=desc)]
         echo = [e for e in echo if e is not None]
         if not echo:
-            # this day (including its buffer) produced no usable data -- skip it
-            # and move on
+            print(f'{day_key}: no usable data from {len(combined_files)} file(s) '
+                  f'({len(day_files)} own-day), skipping day.', flush=True)
             continue
 
         try:
@@ -838,6 +847,11 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         day_start = datetime.strptime(day_key, '%Y%m%d')
         day_end = day_start + timedelta(days=1)
         own_day_mask = (day_ds.ping_time >= np.datetime64(day_start)) & (day_ds.ping_time < np.datetime64(day_end))
+        if not own_day_mask.any():
+            print(f'{day_key}: none of the {len(day_files)} own-day file(s) produced usable data, '
+                  f'skipping day.', flush=True)
+            del day_ds
+            continue
         day_only_ds = day_ds.isel(ping_time=own_day_mask.values)
 
         day_nc_path = nc_file + "_Full_%s.nc" % day_key
@@ -910,8 +924,8 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     :param tilt_correction: Tilt of the sonar transducers (typically 15
         degrees for the uncabled sensors to avoid interference from the
         riser elements).
-    :return: Converted and processed bioacoustic sonar data in a xarray
-        dataset object.
+    :return: Converted and processed bioacoustic sonar data in an xarray
+        Dataset, or None if the file could not be converted or processed.
     """
     # convert and process the raw files using echopype
     env_params = {
@@ -953,8 +967,8 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     # process the data, calculating the volume acoustic backscatter strength and the vertical range
     waveform = 'CW'  # defaults for the EK60 and EK80
     encode = 'power'
-    if zpls_model == 'EK80':
-        try:
+    try:
+        if zpls_model == 'EK80':
             # determining waveform and encoding methods from the data (accounting for 3 different configuration modes)
             beam_grp = ds['Sonar/Beam_group1']
             has_complex = (beam_grp is not None and 'backscatter_i' in beam_grp.data_vars
@@ -998,35 +1012,36 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
                       f'expected {expected_channels}, end processing.')
                 del ds
                 return None
-        except Exception as e:
-            print(f'{file}: compute_Sv failed (error: {e}), end processing.')
-            # manual garbage collection; echopype seems to leave a lot of detritus behind it
-            del ds
-            n = 1
-            while n > 0:
-                n = gc.collect()
-            return None
-    elif zpls_model == 'EK60':
-        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
-    else:
-        # AZFP processing, no waveform or encoding required
-        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)
+        elif zpls_model == 'EK60':
+            ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
+        else:
+            # AZFP processing, no waveform or encoding required
+            ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)
 
-    # Correct reversed ping times
-    if exist_reversed_time(ds_sv, "ping_time"):
-        # Coerce increasing time
-        coerce_increasing_time(ds_sv)
+        # Correct reversed ping times
+        if exist_reversed_time(ds_sv, "ping_time"):
+            # Coerce increasing time
+            coerce_increasing_time(ds_sv)
 
-    # calculate the depth from the range
-    ds_sv = ep.consolidate.add_depth(ds_sv, ds, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
+        # calculate the depth from the range
+        ds_sv = ep.consolidate.add_depth(ds_sv, ds, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
 
-    # add the split-beam angle -- only meaningful for EK60/EK80
-    if zpls_model in ('EK60', 'EK80'):
-        ds_sv = ep.consolidate.add_splitbeam_angle(ds_sv, ds, waveform_mode=waveform, encode_mode=encode,
-                                                    to_disk=False)
+        # add the split-beam angle -- only meaningful for EK60/EK80
+        if zpls_model in ('EK60', 'EK80'):
+            ds_sv = ep.consolidate.add_splitbeam_angle(ds_sv, ds, waveform_mode=waveform, encode_mode=encode,
+                                                        to_disk=False)
 
-    # convert the channel dimension to frequency
-    ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
+        # convert the channel dimension to frequency
+        ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
+    except Exception as e:
+        # any failure here skips only this file, not the whole chunk
+        print(f'{file}: processing failed (error: {e}), end processing.')
+        # manual garbage collection; echopype seems to leave a lot of detritus behind it
+        del ds
+        n = 1
+        while n > 0:
+            n = gc.collect()
+        return None
 
     # extract the Sv, range and depth data
     data = ds_sv[['Sv', 'echo_range', 'depth']]
@@ -1094,11 +1109,20 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :kwargs colorbar_range: Volume acoustic backscatter strength range to
         use for the colorbar
     """
-    # assign the keyword arguments (defaults to None of not set)
+    # assign the keyword arguments, falling back to the site configuration when not set
+    cfg = site_config[site]
     tilt_correction = kwargs.get('tilt_correction')
+    if tilt_correction is None:
+        tilt_correction = cfg['tilt_correction']
     deployed_depth = kwargs.get('deployed_depth')
+    if deployed_depth is None:
+        deployed_depth = cfg['deployed_depth']
     vertical_range = kwargs.get('vertical_range')
+    if vertical_range is None:
+        vertical_range = cfg['vertical_range']
     colorbar_range = kwargs.get('colorbar_range')
+    if colorbar_range is None:
+        colorbar_range = cfg['colorbar_range']
 
     # normalize the date range (handles single-day, single-month, and explicit
     # start/stop input) before dates[1] is accessed below
@@ -1226,22 +1250,9 @@ def main(argv=None):
     if xml_file:
         xml_file = os.path.abspath(xml_file)
 
-    # assign per site variables
-    if site in site_config:
-        # if tilt_correction flag is not set, set the tilt correction from the site configuration
-        if tilt_correction is None:
-            tilt_correction = site_config[site]['tilt_correction']
-        # if deployed_depth flag is not set, set the deployed_depth from the site configuration
-        if deployed_depth is None:
-            deployed_depth = site_config[site]['deployed_depth']
-        # if colorbar_range flag is not set, set the colorbar_range from the site configuration
-        if colorbar_range is None:
-            colorbar_range = site_config[site]['colorbar_range']
-        # if vertical_range flag is not set, set the vertical_range from the site configuration
-        if vertical_range is None:
-            vertical_range = site_config[site]['vertical_range']
-    elif site is not None:
-        raise parser.error('The site name was not found in the configuration dictionary.')
+    # make sure the site is one we have a configuration for (per-site defaults are applied in zpls_echogram)
+    if site not in site_config:
+        parser.error('The site name was not found in the configuration dictionary.')
 
     # make sure the root output directory exists
     if not os.path.isdir(output_directory):

@@ -8,9 +8,12 @@ calendar day's raw files have all been collected.
 import argparse
 import glob
 import os
+import re
+import shutil
 
 from datetime import date, datetime, timedelta, UTC
 from importlib.resources import files
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
@@ -20,7 +23,9 @@ from PIL import Image
 
 from .zpls_echogram import (
     EXPECTED_FREQUENCY_COUNT,
+    _previous_day_last_file,
     attributes,
+    ek_file_list,
     generate_echogram,
     process_sonar_data,
     set_file_name,
@@ -42,7 +47,7 @@ def week_bounds(day: date) -> tuple[date, date]:
 
     :param day: the calendar day to locate within the weekly grid.
     :return: (week_start, week_stop) as date objects; week_stop is
-        exclusive (i.e. the week covers [week_start, week_stop]).
+        exclusive (the week runs up to, but not including, week_stop).
     """
     days_since_epoch = (day - WEEK_GRID_EPOCH).days
     week_index = days_since_epoch // 7
@@ -73,12 +78,25 @@ def week_output_paths(site: str, proc_root: str, day: date) -> tuple[str, str, s
     return output_directory, file_name, week_start_str, week_stop_str
 
 
+def drop_converted_stores(output_directory: str, raw_files: list[str]) -> int:
+    """Delete the zarr stores of the given raw files so they are reconverted"""
+    removed = 0
+    for raw_file in raw_files:
+        store = Path(output_directory) / f'{Path(raw_file).stem}.zarr'
+        if store.is_dir():
+            shutil.rmtree(store)
+            removed += 1
+    return removed
+
+
 def convert_yesterday(site: str, data_root: str, proc_root: str, zpls_model: str, yesterday: date) -> None:
     """
-    Convert and process "yesterday" into its full-resolution daily NetCDF,
-    sing a 2-day (yesterday, today) window internally so
-    the resample bin spanning midnight has a real forward buffer
-    available.
+    Convert and process "yesterday" into its full-resolution daily
+    NetCDF. Uses a one-day window (yesterday up to, but not including,
+    today); the backward buffer (previous day's last file) is picked up
+    inside process_sonar_data. The converted stores for yesterday's files
+    and the buffer file are deleted first so files that were still being
+    synced on an earlier run are reconverted from scratch.
 
     :param site: 8-letter OOI site code (CE02SHBP or CE04OSPS).
     :param data_root: raw data parent directory, one level ABOVE the
@@ -94,23 +112,29 @@ def convert_yesterday(site: str, data_root: str, proc_root: str, zpls_model: str
 
     data_directory = os.path.join(data_root, str(yesterday.year))
     tilt_correction = site_config[site]['tilt_correction']
-    today = yesterday + timedelta(days=1)
 
-    # stop covers yesterday and today
-    dates = [yesterday.strftime('%Y%m%d'), (yesterday + timedelta(days=2)).strftime('%Y%m%d')]
+    # one-day window [yesterday, yesterday + 1); the backward buffer is picked up inside process_sonar_data
+    dates = [yesterday.strftime('%Y%m%d'), (yesterday + timedelta(days=1)).strftime('%Y%m%d')]
 
-    _, nc_files = process_sonar_data(
+    # raw files may have been rsync'ed while still being written, so always reconvert the files in play
+    day_files = sorted(f for sub in ek_file_list(data_directory, dates) for f in sub)
+    buffer_file = _previous_day_last_file(data_directory, dates[0], zpls_model)
+    n_removed = drop_converted_stores(output_directory, day_files + ([buffer_file] if buffer_file else []))
+    print(f'{site}: removed {n_removed} existing converted store(s) for {dates[0]}')
+
+    process_sonar_data(
         site, data_directory, output_directory, dates, zpls_model, None,
         tilt_correction, file_name, RESAMPLE_FREQ, TIME_SHIFT, MAX_GAP,
     )
 
-    # discard today's partial file, if process_sonar_data produced one
-    today_suffix = f"_Full_{today.strftime('%Y%m%d')}.nc"
-    for nc_path in nc_files:
-        if nc_path.endswith(today_suffix):
-            os.remove(nc_path)
-            print(f'{site}: removed partial preview file for {today.strftime("%Y%m%d")} '
-                  f'(will be rewritten complete tomorrow night): {nc_path}')
+
+def remove_buffer_copies(output_directory: str, week_start_str: str) -> None:
+    """Delete zarr stores in the week folder whose raw file started before the week (backward buffer copies)."""
+    for store in Path(output_directory).glob('*.zarr'):
+        match = re.search(r'D(\d{8})-T\d{6}', store.name)
+        if match and match.group(1) < week_start_str:
+            shutil.rmtree(store)
+            print(f'removed buffer copy {store.name}')
 
 
 def regenerate_weekly_average(site: str, proc_root: str, day: date) -> None:
@@ -118,7 +142,9 @@ def regenerate_weekly_average(site: str, proc_root: str, day: date) -> None:
     Regenerate this week's averaged NetCDF and echogram PNG from every
     _Full_YYYYMMDD.nc file currently present in the week's output
     folder (however many days have accumulated so far), overwriting
-    whatever was there before.
+    whatever was there before. Skips writing if no daily files exist yet,
+    or if fewer than the expected number of frequency channels have valid
+    data.
 
     :param site: 8-letter OOI site code (CE02SHBP or CE04OSPS).
     :param proc_root: processed output parent directory, one level
@@ -134,22 +160,23 @@ def regenerate_weekly_average(site: str, proc_root: str, day: date) -> None:
               f'skipping weekly average/echogram regeneration.')
         return
 
-    datasets = [xr.open_dataset(f) for f in daily_files]
-    week_ds = xr.concat(datasets, dim='ping_time', join='outer', combine_attrs='override')
-    for ds in datasets:
-        ds.close()
-
-    week_ds = week_ds.sortby('ping_time')
-    _, index = np.unique(week_ds['ping_time'], return_index=True)
-    week_ds = week_ds.isel(ping_time=index)
-
-    resample_ds = week_ds.copy()
-    resample_ds['ping_time'] = resample_ds['ping_time'] + TIME_SHIFT
-    avg = resample_ds.resample(ping_time=RESAMPLE_FREQ).mean(dim='ping_time', skipna=True, keep_attrs=True)
+    # reduce one day at a time so only one day of full-resolution data is in memory (protects against OOM)
+    day_avgs = []
+    for daily_file in daily_files:
+        with xr.open_dataset(daily_file) as daily_ds:
+            shifted = daily_ds.assign_coords(ping_time=daily_ds['ping_time'] + TIME_SHIFT)
+            day_avgs.append(shifted.resample(ping_time=RESAMPLE_FREQ).mean(dim='ping_time', skipna=True,
+                                                                           keep_attrs=True).compute())
+    # a bin spanning midnight appears once per day; this resample merges the two halves and restores the grid
+    avg = xr.concat(day_avgs, dim='ping_time', data_vars='minimal', coords='minimal', compat='override')
+    # echo_range/nominal_depth are per-day coordinates; take the union across days (matches the backlog fallback)
+    for coord in ('echo_range', 'nominal_depth'):
+        merged = xr.concat([d[coord].reset_coords(drop=True) for d in day_avgs], dim='day',
+                           join='outer').max('day', skipna=True)
+        avg = avg.assign_coords({coord: merged})
+    avg = avg.resample(ping_time=RESAMPLE_FREQ).mean(keep_attrs=True)
     avg = avg.interpolate_na(dim='ping_time', max_gap=MAX_GAP)
-    avg = avg.compute()
     avg = avg.dropna('range_sample', subset=['echo_range'])
-    week_ds.close()
 
     # same channel-count guard zpls_echogram() applies before plotting
     expected_count = EXPECTED_FREQUENCY_COUNT.get('EK80')
@@ -214,6 +241,8 @@ def run_nightly(site: str, data_root: str, proc_root: str, zpls_model: str, day:
     yesterday = day if day is not None else datetime.now(UTC).date() - timedelta(days=1)
     convert_yesterday(site, data_root, proc_root, zpls_model, yesterday)
     regenerate_weekly_average(site, proc_root, yesterday)
+    output_directory, _, week_start_str, _ = week_output_paths(site, proc_root, yesterday)
+    remove_buffer_copies(output_directory, week_start_str)
 
 
 def main(argv=None):
