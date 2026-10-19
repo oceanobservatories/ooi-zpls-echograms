@@ -1,0 +1,24 @@
+# Nightly near real-time processing for one cabled EK80 site. The instance name is the site code, e.g.
+# zplsc-nrt@CE02SHBP.service, and must match the per-site env file name. See docs/deployment.md.
+#
+# Template for a system unit run as a service account. Replace SERVICE_ACCOUNT, and adjust the env file paths if
+# /etc/zplsc is not used. For a systemd user unit instead, drop User=/Group= and point EnvironmentFile at the
+# account's own configuration directory (%h/.config/zplsc/).
+[Unit]
+Description=ZPLSC nightly echogram processing (%i)
+Wants=network-online.target
+After=network-online.target remote-fs.target
+
+[Service]
+Type=oneshot
+User=SERVICE_ACCOUNT
+Group=SERVICE_ACCOUNT
+EnvironmentFile=/etc/zplsc/common.env
+EnvironmentFile=/etc/zplsc/%i.env
+# flock waits up to 12 h for the shared lock; allow time for the run itself on top of that
+TimeoutStartSec=16h
+ExecStart=/usr/bin/flock -w 43200 ${LOCK_FILE} \
+    /usr/bin/podman run --rm --replace --name zplsc-nrt-%i \
+    -v ${RAW_MOUNT}:/node_data:ro -v ${PROC_MOUNT}:${PROC_MOUNT} ${IMAGE} \
+    python -m ooi_zpls_echograms.cabled_nrt_echogram -s %i -d ${DATA_ROOT} -o ${PROC_ROOT}
+ExecStopPost=-/usr/bin/podman rm -f zplsc-nrt-%i

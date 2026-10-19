@@ -1,0 +1,23 @@
+# Weekly trailing backlog for one cabled EK80 site: reprocesses the last N_WEEKS complete weeks to repair days that
+# were short when the nightly run happened. Takes the same lock as the nightly units. See docs/deployment.md.
+#
+# Template for a system unit run as a service account; see the notes in zplsc-nrt@.service.
+[Unit]
+Description=ZPLSC weekly trailing backlog (%i)
+Wants=network-online.target
+After=network-online.target remote-fs.target
+
+[Service]
+Type=oneshot
+User=SERVICE_ACCOUNT
+Group=SERVICE_ACCOUNT
+EnvironmentFile=/etc/zplsc/common.env
+EnvironmentFile=/etc/zplsc/%i.env
+TimeoutStartSec=16h
+ExecStartPre=/usr/bin/mkdir -p ${LOG_DIR}/%i
+ExecStart=/usr/bin/flock -w 43200 ${LOCK_FILE} \
+    /usr/bin/podman run --rm --replace --name zplsc-backlog-%i \
+    -e CONDA_SH=/opt/conda/etc/profile.d/conda.sh -e LOG_DIR=/logs \
+    -v ${RAW_MOUNT}:/node_data:ro -v ${PROC_MOUNT}:${PROC_MOUNT} -v ${LOG_DIR}/%i:/logs ${IMAGE} \
+    bash /app/utilities/weekly_trailing_backlog.sh %i ${DATA_ROOT} ${PROC_ROOT} ${N_WEEKS}
+ExecStopPost=-/usr/bin/podman rm -f zplsc-backlog-%i
