@@ -29,20 +29,20 @@ manual review.
 |   Coastal Endurance    | [CE06ISSM](https://oceanobservatories.org/site/ce06issm/) |     AZFP     | 29 m  | Washington Inshore Surface Mooring                              |
 |   Coastal Endurance    | [CE07SHSM](https://oceanobservatories.org/site/ce07shsm/) |     AZFP     | 87 m  | Washington Shelf Surface Mooring                                |
 |   Coastal Endurance    | [CE09OSSM](https://oceanobservatories.org/site/ce09ossm/) |     AZFP     | 542 m | Washington Offshore Surface Mooring                             |
-|  Coastal Pioneer NES   | [CP03ISSM](https://oceanobservatories.org/site/cp03issm/) |     AZFP     | 95 m  | Inshore Surface Mooring                       |
-|  Coastal Pioneer NES   | [CP01CNSM](https://oceanobservatories.org/site/cp01cnsm/) |     AZFP     | 135 m | Central Surface Mooring                       |
-|  Coastal Pioneer NES   | [CP04OSSM](https://oceanobservatories.org/site/cp04ossm/) |     AZFP     | 450 m | Offshore Surface Mooring                      |
-|  Coastal Pioneer MAB   | [CP11NOSM](https://oceanobservatories.org/site/cp11nosm/) |     AZFP     | 95 m  | Northern Surface Mooring                     |
-|  Coastal Pioneer MAB   | [CP10CNSM](https://oceanobservatories.org/site/cp10cnsm/) |     AZFP     | 135 m | Central Surface Mooring                      |
-|  Coastal Pioneer MAB   | [CP11SOSM](https://oceanobservatories.org/site/cp11sosm/) |     AZFP     | 450 m | Southern Surface Mooring                     |
+|  Coastal Pioneer NES   | [CP03ISSM](https://oceanobservatories.org/site/cp03issm/) |     AZFP     | 95 m  | Inshore Surface Mooring                                         |
+|  Coastal Pioneer NES   | [CP01CNSM](https://oceanobservatories.org/site/cp01cnsm/) |     AZFP     | 135 m | Central Surface Mooring                                         |
+|  Coastal Pioneer NES   | [CP04OSSM](https://oceanobservatories.org/site/cp04ossm/) |     AZFP     | 450 m | Offshore Surface Mooring                                        |
+|  Coastal Pioneer MAB   | [CP11NOSM](https://oceanobservatories.org/site/cp11nosm/) |     AZFP     | 95 m  | Northern Surface Mooring                                        |
+|  Coastal Pioneer MAB   | [CP10CNSM](https://oceanobservatories.org/site/cp10cnsm/) |     AZFP     | 135 m | Central Surface Mooring                                         |
+|  Coastal Pioneer MAB   | [CP11SOSM](https://oceanobservatories.org/site/cp11sosm/) |     AZFP     | 450 m | Southern Surface Mooring                                        |
 | Global Argentine Basin | [GA02HYPM](https://oceanobservatories.org/site/ga02hypm/) |     AZFP     | 150 m | Apex Profiler Mooring, both upward and downward looking sensors |
 |  Global Irminger Sea   | [GI02HYPM](https://oceanobservatories.org/site/gi02hypm/) |     AZFP     | 150 m | Apex Profiler Mooring, both upward and downward looking sensors |
 |  Global Station Papa   | [GP02HYPM](https://oceanobservatories.org/site/gp02hypm/) |     AZFP     | 150 m | Apex Profiler Mooring, both upward and downward looking sensors |
 | Global Southern Ocean  | [GS02HYPM](https://oceanobservatories.org/site/gs02hypm/) |     AZFP     | 150 m | Apex Profiler Mooring, both upward and downward looking sensors |
 
 [Echopype](https://echopype.readthedocs.io/en/latest/), the open-source ocean sonar data processing module, is utilized 
-to process the OOI bioacoustic sonar data from the cabled and uncabled sensors to generate weekly echograms that 
-the user community can use to quickly assess the quality and applicability of the data to their research needs. 
+to process the OOI bioacoustic sonar data from the cabled and uncabled sensors. Weekly echograms are produced so 
+the user community can quickly assess the quality and applicability of the data to their research needs. 
 Additionally, preliminary processed data (saved to NetCDF files) is generated to facilitate access to the data in a
 standard format for others to use for further processing and analysis.
 
@@ -54,10 +54,10 @@ the realtime cabled data from [CE02SHBP](https://oceanobservatories.org/site/ce0
 ## Installation and Setup
 
 Future releases will make this code available for installation via conda-forge. For now users will need to download (or 
-use git to clone) the code to their local computer, setup a virtual environment for the processing, and then install a 
+use git to clone) the code to their local computer, set up a virtual environment for the processing, and then install a 
 development copy of the code into that environment. The installation and setup steps below, assume the user has already 
 installed either [anaconda](https://www.anaconda.com/products/individual) or [miniconda](https://docs.conda.io/en/latest/miniconda.html) 
-to use in executing the python code.
+to use in executing the Python code.
 
 ```shell
 # download the ooi-zpls-echograms code
@@ -95,21 +95,21 @@ zpls-echogram -s [site_code] -d [data_directory] -o [output_directory] -dr [date
 
 The inputs to the function are defined below, based on whether they are required or optional.
 
-| Required Inputs | Description |  
-|:-------------------------:|:------------------------------------------------------------|
-| -s, --site                | The OOI 8-letter site name for where the ZPLSC/G is located. |  
-| -d, --data_directory      | The path to the root data directory, below which the .01A or .raw files may be found. |  
-| -o, --output_directory    | The path to the root data directory where .nc file and .png plot will be saved. |  
-| -dr, --date_range         | The date range to process, as YYYYMMDD or YYYYMM. The stop date is exclusive (processing runs up to, but not including, it). Both dates must use the same format. Examples:<br>`-dr 20200118` processes the day 01/18/2020,<br>`-dr 202001` processes the whole month, 01/01/2020 through 01/31/2020,<br>`-dr 202001 202002` processes 01/01/2020 through 02/29/2020 (a month stop includes that whole month),<br>`-dr 20200115 20200216` processes 01/15/2020 through 02/15/2020 |  
-| -zm, --zpls_model         | Sensor model: EK60 or EK80 for cabled data, or an AZFP for uncabled |
-| **-xf, --xml_file**       | The path to .xml file to use if the sensor model is an AZFP. **Required if the sensor model is AZFP** |  
+|    Required Inputs     | Description                                                                                                                                                                                                                                                                                                                                                                                                                                                                       |  
+|:----------------------:|:----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------|
+|       -s, --site       | The OOI 8-letter site name for where the ZPLSC/G is located.                                                                                                                                                                                                                                                                                                                                                                                                                      |  
+|  -d, --data_directory  | The path to the root data directory, below which the .01A or .raw files may be found.                                                                                                                                                                                                                                                                                                                                                                                             |  
+| -o, --output_directory | The path to the root data directory where .nc file and .png plot will be saved.                                                                                                                                                                                                                                                                                                                                                                                                   |  
+|   -dr, --date_range    | The date range to process, as YYYYMMDD or YYYYMM. The stop date is exclusive (processing runs up to, but not including, it). Both dates must use the same format. Examples:<br>`-dr 20200118` processes the day 01/18/2020,<br>`-dr 202001` processes the whole month, 01/01/2020 through 01/31/2020,<br>`-dr 202001 202002` processes 01/01/2020 through 02/29/2020 (a month stop includes that whole month),<br>`-dr 20200115 20200216` processes 01/15/2020 through 02/15/2020 |  
+|   -zm, --zpls_model    | Sensor model: EK60 or EK80 for cabled data, or an AZFP for uncabled                                                                                                                                                                                                                                                                                                                                                                                                               |
+|  **-xf, --xml_file**   | The path to .xml file to use if the sensor model is an AZFP. **Required if the sensor model is AZFP**                                                                                                                                                                                                                                                                                                                                                                             |  
 
-| Optional flags | Description |  
-|:-------------------------:|:------------------------------------------------------------|
-| -tc, --tilt_correction    | Apply tilt correction in degree(s) |  
-| -dd, --deployed_depth     | The depth where the ZPLSC/G is located at |  
-| -cr, --colorbar_range     | Set colorbar range. Usage: "min max" |  
-| -vr, --vertical_range     | Set the range for the y-axis. Usage: "min max" |  
+|     Optional flags     | Description                                    |  
+|:----------------------:|:-----------------------------------------------|
+| -tc, --tilt_correction | Apply tilt correction in degree(s)             |  
+| -dd, --deployed_depth  | The depth where the ZPLSC/G is located at      |  
+| -cr, --colorbar_range  | Set colorbar range. Usage: "min max"           |  
+| -vr, --vertical_range  | Set the range for the y-axis. Usage: "min max" |  
 
 ### Usage Notes
 
@@ -126,7 +126,10 @@ The inputs to the function are defined below, based on whether they are required
   "_Upper" or "_Lower" to indicate which of the sensors is being used (there are two on the 150 m sphere, one looking 
   up towards the surface, and the other looking down).
 
-* The preset colorbar ranges are the same for every array. Feel free to change it via the optional colorbar_range input.
+* The colorbar range and colormap for each site are set in `site_config` in `zpls_echogram.py` (`colorbar_range` and
+  `colormap`, any colormap name registered with matplotlib, e.g. `magma` or `cmo.balance`). The range can also be
+  overridden per run with the optional `-cr` flag. After changing either, existing echograms can be redrawn from their
+  `_Averaged.nc` files with `utilities/regenerate_echograms.py`, without reprocessing any data.
 
 * If `-zm EK80` is used, only narrowband (CW) channels are processed, with power or complex encoding detected per
   file. Broadband (LFM) channels are dropped, files with no CW channels are skipped, and files recorded at a full
@@ -134,14 +137,15 @@ The inputs to the function are defined below, based on whether they are required
   
 ## Utilities and Related Tools
 
-| Tool | Purpose |
-|:-----|:--------|
-| `utilities/batch_zplsc_cabled.sh` | Batch process a year of cabled EK60/EK80 data in weekly chunks (4 in parallel, per-chunk logs) |
-| `utilities/batch_zplsc_uncabled.sh` | Batch process an AZFP deployment in weekly chunks |
-| `utilities/weekly_trailing_backlog.sh` | Reprocess the last N complete weeks of cabled EK80 data to repair days that were incomplete when the nightly run happened |
-| `utilities/classify_configurations.py` | Inventory EK80 raw files by recording configuration (pulse form, encoding, pulse length, band, ping timing) using only file headers |
-| `python -m ooi_zpls_echograms.cabled_nrt_echogram` | Nightly near real-time processing for the cabled EK80 sites; see [docs/nrt.md](docs/nrt.md) |
-| `python -m ooi_zpls_echograms.duplication_check` | Find and remove duplicate EK80 converted stores left in adjacent weekly folders by backlog runs |
+| Tool                                               | Purpose                                                                                                                             |
+|:---------------------------------------------------|:------------------------------------------------------------------------------------------------------------------------------------|
+| `utilities/batch_zplsc_cabled.sh`                  | Batch process a year of cabled EK60/EK80 data in weekly chunks (4 in parallel, per-chunk logs)                                      |
+| `utilities/batch_zplsc_uncabled.sh`                | Batch process an AZFP deployment in weekly chunks                                                                                   |
+| `utilities/weekly_trailing_backlog.sh`             | Reprocess the last N complete weeks of cabled EK80 data to repair days that were incomplete when the nightly run happened           |
+| `utilities/classify_configurations.py`             | Inventory EK80 raw files by recording configuration (pulse form, encoding, pulse length, band, ping timing) using only file headers |
+| `utilities/regenerate_echograms.py`                | Redraw echogram PNGs from existing `_Averaged.nc` files with the current `site_config` colormap and ranges                          |
+| `python -m ooi_zpls_echograms.cabled_nrt_echogram` | Nightly near real-time processing for the cabled EK80 sites; see [docs/nrt.md](docs/nrt.md)                                         |
+| `python -m ooi_zpls_echograms.duplication_check`   | Find and remove duplicate EK80 converted stores left in adjacent weekly folders by backlog runs                                     |
 
 ## Raw and Processed Data Folders and Files
 
@@ -227,7 +231,7 @@ the three data types listed above. The echogram shares the base name of the data
 
 ## Processing Examples
 
-The examples below show how to use the python script with some of the different options from above. The examples are
+The examples below show how to use the Python script with some of the different options from above. The examples are
 all built around using the AZFP data from the Global Argentine Basin upward looking sensor.
 
 **Example 1:**

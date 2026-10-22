@@ -191,7 +191,7 @@ def regenerate_weekly_average(site: str, proc_root: str, day: date) -> None:
     generate_echogram(
         avg, site, cfg['long_name'], cfg['deployed_depth'], output_directory, file_name,
         [week_start_str, week_stop_str],
-        vertical_range=cfg['vertical_range'], colorbar_range=cfg['colorbar_range'],
+        vertical_range=cfg['vertical_range'], colorbar_range=cfg['colorbar_range'], colormap=cfg['colormap'],
     )
 
     # add the OOI logo watermark

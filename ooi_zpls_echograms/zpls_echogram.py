@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
-import cmocean
+import cmocean  # noqa: F401 -- importing registers the cmocean colormaps with matplotlib as 'cmo.<name>'
 import dateutil.parser as dparser
 import echopype as ep
 import gc
 import glob
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
@@ -28,11 +29,15 @@ from typing import List, Tuple
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 register_matplotlib_converters()
+
+# per-site settings; 'colormap' is any colormap name registered with matplotlib (e.g. 'magma', or 'cmo.balance' from
+# cmocean). The cabled sites use the sequential 'magma'; the uncabled and global sites keep the original 'cmo.balance'.
 site_config = {
     'CE01ISSM': {
         'long_name': 'Coastal Endurance, Oregon Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 25],
         'deployed_depth': 25,
         'depth_offset': 1.0,
@@ -44,6 +49,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Oregon Shelf Cabled Benthic Experiment Package',
         'tilt_correction': 0,
         'colorbar_range': [-90, -40],
+        'colormap': 'magma',
         'vertical_range': [0, 81],
         'deployed_depth': 81,
         'depth_offset': 2.0,
@@ -55,6 +61,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Oregon Offshore Cabled Shallow Profiler Mooring',
         'tilt_correction': 0,
         'colorbar_range': [-90, -40],
+        'colormap': 'magma',
         'vertical_range': [0, 200],
         'deployed_depth': 200,
         'depth_offset': 0.0,
@@ -66,6 +73,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 30],
         'deployed_depth': 29,
         'depth_offset': 1.0,
@@ -77,6 +85,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Shelf Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 90],
         'deployed_depth': 87,
         'depth_offset': 1.0,
@@ -88,6 +97,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 540],
         'deployed_depth': 542,
         'depth_offset': 1.0,
@@ -99,6 +109,7 @@ site_config = {
         'long_name': 'Coastal Pioneer New England Shelf, Central Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 135],
         'deployed_depth': 135,
         'depth_offset': 1.0,
@@ -110,6 +121,7 @@ site_config = {
         'long_name': 'Coastal Pioneer New England Shelf, Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 95],
         'deployed_depth': 95,
         'depth_offset': 1.0,
@@ -121,6 +133,7 @@ site_config = {
         'long_name': 'Coastal Pioneer New England Shelf, Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 455],
         'deployed_depth': 455,
         'depth_offset': 1.0,
@@ -132,6 +145,7 @@ site_config = {
         'long_name': 'Coastal Pioneer Mid-Atlantic Bight, Central Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 30],
         'deployed_depth': 30,
         'depth_offset': 1.0,
@@ -143,6 +157,7 @@ site_config = {
         'long_name': 'Coastal Pioneer Mid-Atlantic Bight, Northern Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 100],
         'deployed_depth': 100,
         'depth_offset': 1.0,
@@ -154,6 +169,7 @@ site_config = {
         'long_name': 'Coastal Pioneer Mid-Atlantic Bight, Southern Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 100],
         'deployed_depth': 100,
         'depth_offset': 1.0,
@@ -165,6 +181,7 @@ site_config = {
         'long_name': 'Global Irminger Sea, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0.0,
@@ -176,6 +193,7 @@ site_config = {
         'long_name': 'Global Irminger Sea, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -187,6 +205,7 @@ site_config = {
         'long_name': 'Global Station Papa, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
@@ -198,6 +217,7 @@ site_config = {
         'long_name': 'Global Station Papa, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -209,6 +229,7 @@ site_config = {
         'long_name': 'Global Argentine Basin, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
@@ -220,6 +241,7 @@ site_config = {
         'long_name': 'Global Argentine Basin, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -231,6 +253,7 @@ site_config = {
         'long_name': 'Global Southern Ocean, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
@@ -242,6 +265,7 @@ site_config = {
         'long_name': 'Global Southern Ocean, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -352,7 +376,7 @@ def ax_config(ax, frequency):
 
 
 def generate_echogram(data, site, long_name, deployed_depth, output_directory, file_name, dates,
-                      vertical_range=None, colorbar_range=None):
+                      vertical_range=None, colorbar_range=None, colormap='cmo.balance'):
     """
     Generates and saves to disk an echogram of the acoustic volume backscatter
     for each of the frequencies.
@@ -365,7 +389,9 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     :param file_name: file name to use for the echogram.
     :param dates: date range to plot, sets the x-axis.
     :param vertical_range: vertical range to plot, sets the y-axis.
-    :param colorbar_range: colorbar range to plot, sets the colormap.
+    :param colorbar_range: colorbar range to plot, sets the colormap limits.
+    :param colormap: name of a colormap registered with matplotlib (e.g.
+        'magma', or 'cmo.balance' from cmocean); defaults to 'cmo.balance'.
     :return None: generates and saves an echogram to disk.
     """
     # setup defaults based on inputs
@@ -397,8 +423,8 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
         y_min = vertical_range[0]
         y_max = vertical_range[1]
 
-    # set the color map to "balance" from cmocean and set the c_min and c_max from the colorbar range
-    my_cmap = cmocean.cm.balance
+    # set the color map from its registered name and set the c_min and c_max from the colorbar range
+    my_cmap = matplotlib.colormaps[colormap]
     if not colorbar_range:
         v_min = None  # colorbar range will be set by the range in the data
         v_max = None
@@ -1177,7 +1203,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     # generate the echogram
     long_name = site_config[site]['long_name']
     generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates,
-                      vertical_range=vertical_range, colorbar_range=colorbar_range)
+                      vertical_range=vertical_range, colorbar_range=colorbar_range, colormap=cfg['colormap'])
 
     # add the OOI logo as a watermark
     echogram = os.path.join(output_directory, file_name + '.png')

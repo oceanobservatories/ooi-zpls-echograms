@@ -17,7 +17,7 @@ Every night, for the previous UTC day, the job:
    `<SITE>_Bioacoustic_Echogram_<start>-<stop>_Calibrated_Sv_Full_<YYYYMMDD>.nc`, into the week's folder, along with
    one converted `.zarr` store per raw file.
 2. Regenerates the week's averaged file (`..._Calibrated_Sv_Averaged.nc`) and echogram (`..._Calibrated_Sv.png`) from
-   all of the daily files present in the week's folder so far. The echogram for the current week therefore grows by
+   all the daily files present in the week's folder so far. The echogram for the current week therefore grows by
    one day each night until the week is complete.
 3. Removes converted stores in the week's folder that belong to raw files from before the week started (see
    [Backward buffer copies](#backward-buffer-copies)).
@@ -46,7 +46,7 @@ linear interpolation, and range bins with no data on any channel are dropped.
 
 If fewer than 3 frequency channels have valid data for the week, the averaged file and echogram are not rewritten, and
 the files from the previous night stay in place. This normally means the instrument was misconfigured or a channel was
-switched off, not a processing error.
+switched off.
 
 ### Backward buffer copies
 
@@ -63,20 +63,20 @@ per-year folders:
 python -m ooi_zpls_echograms.cabled_nrt_echogram -s SITE -d DATA_ROOT -o PROC_ROOT [--date YYYYMMDD]
 ```
 
-| Argument | Description |
-|:---------|:------------|
-| `-s`, `--site` | `CE02SHBP` or `CE04OSPS` |
-| `-d`, `--data-root` | Raw data parent directory, above the per-year folders |
-| `-o`, `--proc-root` | Processed output parent directory, above the per-year `processed` folders |
-| `-zm`, `--zpls-model` | Defaults to `EK80`, the only model this module supports |
-| `--date` | Process this day instead of yesterday (UTC); used for testing and for redoing a day by hand |
+| Argument              | Description                                                                                 |
+|:----------------------|:--------------------------------------------------------------------------------------------|
+| `-s`, `--site`        | `CE02SHBP` or `CE04OSPS`                                                                    |
+| `-d`, `--data-root`   | Raw data parent directory, above the per-year folders                                       |
+| `-o`, `--proc-root`   | Processed output parent directory, above the per-year `processed` folders                   |
+| `-zm`, `--zpls-model` | Defaults to `EK80`, the only model this module supports                                     |
+| `--date`              | Process this day instead of yesterday (UTC); used for testing and for redoing a day by hand |
 
 The raw and processed roots for the two sites, as seen inside the container with the standard mounts
 (`/rsn_cabled/rsn_data/DVT_Data` mounted read-only at `/node_data`, the processed output root at `/data/zplsc`):
 
-| Site | Data root | Processed root |
-|:-----|:----------|:---------------|
-| CE02SHBP | `/node_data/mj01c/ZPLSCB101_10.33.13.7` | `/data/zplsc/CE02SHBP/MJ01C/07-ZPLSCB101` |
+| Site     | Data root                                 | Processed root                            |
+|:---------|:------------------------------------------|:------------------------------------------|
+| CE02SHBP | `/node_data/mj01c/ZPLSCB101_10.33.13.7`   | `/data/zplsc/CE02SHBP/MJ01C/07-ZPLSCB101` |
 | CE04OSPS | `/node_data/pc01b/ZPLSCB102_10.33.10.143` | `/data/zplsc/CE04OSPS/PC01B/05-ZPLSCB102` |
 
 Example, redoing 2026-10-12 for CE04OSPS:
@@ -90,19 +90,16 @@ podman run --rm \
         -d /node_data/pc01b/ZPLSCB102_10.33.10.143 -o /data/zplsc/CE04OSPS/PC01B/05-ZPLSCB102 --date 20261012
 ```
 
-A manual run regenerates the whole week's average and echogram afterwards, so redoing any day in a week leaves that
-week's products current. Run manual jobs under the same lock as the scheduled ones (see [Schedule](#schedule)).
+A manual run regenerates the whole week's average and echogram afterward, so redoing any day in a week leaves that
+week's products current.
 
 ## Schedule
 
-Both sites run nightly at 02:00 UTC, processing the previous UTC day. The two runs share a single lock, so they run one
-after the other rather than at the same time; each waits up to 12 hours for the lock. Running them in sequence keeps
-the peak memory use to that of the larger site (CE04OSPS) instead of the sum of both. The weekly trailing backlog must
-take the same lock, because it deletes and rebuilds stores in week folders that a nightly run may be reading.
+Both sites run nightly at 02:00 UTC, processing the previous UTC day.
 
 ## Weekly trailing backlog
 
-A nightly run can only process the raw files that have arrived by the time it starts. If RCA's copy of a file was
+A nightly run can only process the raw files that have arrived by the time it starts. If the copy of a file was
 incomplete, or arrives late, that day is short. `utilities/weekly_trailing_backlog.sh` repairs this by reprocessing the
 last complete week (or the last N complete weeks):
 
@@ -128,15 +125,15 @@ CE02SHBP: regenerated weekly average and echogram for 20261011-20261018 from 4 d
 
 The number of daily files should match the number of days of the week processed so far. Other messages to know:
 
-| Message | Meaning |
-|:--------|:--------|
-| `<SITE>: removed N existing converted store(s) for YYYYMMDD` | Start of the conversion; N is 0 or 1 on a first run, about the day's file count plus one when a day is redone |
-| `<file>: processing failed (error: ...)` | One raw file could not be processed and was skipped; the rest of the day continues |
-| `<file>: all channels are LFM/broadband, no usable CW data, ...` | The file holds only broadband channels, which are not processed |
-| `YYYYMMDD: no usable data from N file(s) (M own-day), skipping day.` | No file for that day could be processed; no daily file is written |
-| `YYYYMMDD: none of the M own-day file(s) produced usable data, ...` | Only the backward buffer file converted; no daily file is written |
-| `<SITE>: no daily files present yet for <week>, skipping ...` | Nothing to average yet for that week |
-| `<SITE>: only N of the expected 3 frequency channels reported valid data ...` | The week's average and echogram were not rewritten (see above) |
+| Message                                                                       | Meaning                                                                                                       |
+|:------------------------------------------------------------------------------|:--------------------------------------------------------------------------------------------------------------|
+| `<SITE>: removed N existing converted store(s) for YYYYMMDD`                  | Start of the conversion; N is 0 or 1 on a first run, about the day's file count plus one when a day is redone |
+| `<file>: processing failed (error: ...)`                                      | One raw file could not be processed and was skipped; the rest of the day continues                            |
+| `<file>: all channels are LFM/broadband, no usable CW data, ...`              | The file holds only broadband channels, which are not processed                                               |
+| `YYYYMMDD: no usable data from N file(s) (M own-day), skipping day.`          | No file for that day could be processed; no daily file is written                                             |
+| `YYYYMMDD: none of the M own-day file(s) produced usable data, ...`           | Only the backward buffer file converted; no daily file is written                                             |
+| `<SITE>: no daily files present yet for <week>, skipping ...`                 | Nothing to average yet for that week                                                                          |
+| `<SITE>: only N of the expected 3 frequency channels reported valid data ...` | The week's average and echogram were not rewritten (see above)                                                |
 
 Most gaps in the record come from power or cable outages, when no raw files were recorded at all, and from RCA
 changing the instrument configuration. Those are real gaps with nothing to backfill. Partial copies of raw files are a
@@ -147,9 +144,9 @@ minor cause, and the weekly trailing backlog repairs them.
 Peak memory is set by file conversion, not by the weekly averaging step. Measured on single-site test weeks with the
 monitor sampling every 15 s, so true peaks may be somewhat higher:
 
-| Site | Daily `_Full_` file | Container peak | System peak | 7-day test week |
-|:-----|:--------------------|:---------------|:------------|:----------------|
-| CE04OSPS | ~10.9 GB | ~76 GiB | ~84 GiB | ~77 min |
-| CE02SHBP | ~5.0 GB | ~37 GiB | ~46 GiB | ~42 min |
+| Site     | Daily `_Full_` file | Container peak | System peak | 7-day test week |
+|:---------|:--------------------|:---------------|:------------|:----------------|
+| CE04OSPS | ~10.9 GB            | ~76 GiB        | ~84 GiB     | ~77 min         |
+| CE02SHBP | ~5.0 GB             | ~37 GiB        | ~46 GiB     | ~42 min         |
 
 A normal nightly run processes one day per site, which takes a few minutes for each.
