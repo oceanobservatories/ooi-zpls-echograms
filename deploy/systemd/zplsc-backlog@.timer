@@ -1,0 +1,10 @@
+# Runs zplsc-backlog@<SITE>.service weekly on Wednesday at 10:00 UTC, clear of the 02:00 UTC nightly runs.
+[Unit]
+Description=ZPLSC weekly trailing backlog timer (%i)
+
+[Timer]
+OnCalendar=Wed *-*-* 10:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

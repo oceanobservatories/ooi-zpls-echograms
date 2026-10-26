@@ -1,0 +1,16 @@
+# Normalize all text files to LF line endings, in the repository and in every checkout, regardless of platform or
+# core.autocrlf settings.
+* text=auto eol=lf
+
+# Binary files: never convert line endings or attempt text diffs
+*.png binary
+*.jpg binary
+*.gif binary
+*.pdf binary
+*.nc binary
+*.raw binary
+*.01A binary
+*.tar binary
+*.tgz binary
+*.gz binary
+*.zip binary

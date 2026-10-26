@@ -1,0 +1,10 @@
+# Runs zplsc-nrt@<SITE>.service nightly at 02:00 UTC. Persistent=true runs a missed night at the next boot.
+[Unit]
+Description=ZPLSC nightly echogram timer (%i)
+
+[Timer]
+OnCalendar=*-*-* 02:00:00 UTC
+Persistent=true
+
+[Install]
+WantedBy=timers.target

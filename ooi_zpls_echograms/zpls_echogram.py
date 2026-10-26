@@ -1,11 +1,12 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
 import argparse
-import cmocean
+import cmocean  # noqa: F401 -- importing registers the cmocean colormaps with matplotlib as 'cmo.<name>'
 import dateutil.parser as dparser
 import echopype as ep
 import gc
 import glob
+import matplotlib
 import matplotlib.pyplot as plt
 import matplotlib.dates as mdates
 import numpy as np
@@ -28,11 +29,15 @@ from typing import List, Tuple
 warnings.filterwarnings('ignore', category=FutureWarning)
 warnings.filterwarnings('ignore', category=DeprecationWarning)
 register_matplotlib_converters()
+
+# per-site settings; 'colormap' is any colormap name registered with matplotlib (e.g. 'magma', or 'cmo.balance' from
+# cmocean). The cabled sites use the sequential 'magma'; the uncabled and global sites keep the original 'cmo.balance'.
 site_config = {
     'CE01ISSM': {
         'long_name': 'Coastal Endurance, Oregon Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 25],
         'deployed_depth': 25,
         'depth_offset': 1.0,
@@ -43,7 +48,8 @@ site_config = {
     'CE02SHBP': {
         'long_name': 'Coastal Endurance, Oregon Shelf Cabled Benthic Experiment Package',
         'tilt_correction': 0,
-        'colorbar_range': [-90, -50],
+        'colorbar_range': [-90, -40],
+        'colormap': 'magma',
         'vertical_range': [0, 81],
         'deployed_depth': 81,
         'depth_offset': 2.0,
@@ -54,7 +60,8 @@ site_config = {
     'CE04OSPS': {
         'long_name': 'Coastal Endurance, Oregon Offshore Cabled Shallow Profiler Mooring',
         'tilt_correction': 0,
-        'colorbar_range': [-90, -50],
+        'colorbar_range': [-90, -40],
+        'colormap': 'magma',
         'vertical_range': [0, 200],
         'deployed_depth': 200,
         'depth_offset': 0.0,
@@ -66,6 +73,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 30],
         'deployed_depth': 29,
         'depth_offset': 1.0,
@@ -77,6 +85,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Shelf Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 90],
         'deployed_depth': 87,
         'depth_offset': 1.0,
@@ -88,6 +97,7 @@ site_config = {
         'long_name': 'Coastal Endurance, Washington Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 540],
         'deployed_depth': 542,
         'depth_offset': 1.0,
@@ -99,6 +109,7 @@ site_config = {
         'long_name': 'Coastal Pioneer New England Shelf, Central Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 135],
         'deployed_depth': 135,
         'depth_offset': 1.0,
@@ -110,6 +121,7 @@ site_config = {
         'long_name': 'Coastal Pioneer New England Shelf, Inshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 95],
         'deployed_depth': 95,
         'depth_offset': 1.0,
@@ -121,6 +133,7 @@ site_config = {
         'long_name': 'Coastal Pioneer New England Shelf, Offshore Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 455],
         'deployed_depth': 455,
         'depth_offset': 1.0,
@@ -132,6 +145,7 @@ site_config = {
         'long_name': 'Coastal Pioneer Mid-Atlantic Bight, Central Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 30],
         'deployed_depth': 30,
         'depth_offset': 1.0,
@@ -143,6 +157,7 @@ site_config = {
         'long_name': 'Coastal Pioneer Mid-Atlantic Bight, Northern Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 100],
         'deployed_depth': 100,
         'depth_offset': 1.0,
@@ -154,6 +169,7 @@ site_config = {
         'long_name': 'Coastal Pioneer Mid-Atlantic Bight, Southern Surface Mooring',
         'tilt_correction': 15,
         'colorbar_range': [-90, -50],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 100],
         'deployed_depth': 100,
         'depth_offset': 1.0,
@@ -165,6 +181,7 @@ site_config = {
         'long_name': 'Global Irminger Sea, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0.0,
@@ -176,6 +193,7 @@ site_config = {
         'long_name': 'Global Irminger Sea, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -187,6 +205,7 @@ site_config = {
         'long_name': 'Global Station Papa, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
@@ -198,6 +217,7 @@ site_config = {
         'long_name': 'Global Station Papa, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -209,6 +229,7 @@ site_config = {
         'long_name': 'Global Argentine Basin, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
@@ -220,6 +241,7 @@ site_config = {
         'long_name': 'Global Argentine Basin, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -231,6 +253,7 @@ site_config = {
         'long_name': 'Global Southern Ocean, Apex Profiler Mooring, Upward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 150],
         'deployed_depth': 150,
         'depth_offset': 0,
@@ -242,6 +265,7 @@ site_config = {
         'long_name': 'Global Southern Ocean, Apex Profiler Mooring, Downward Looking',
         'tilt_correction': 15,
         'colorbar_range': [-95, -65],
+        'colormap': 'cmo.balance',
         'vertical_range': [0, 400],
         'deployed_depth': 150,
         'depth_offset': -1.62,
@@ -280,7 +304,7 @@ attributes = {
         'long_name': 'Time of Each Ping',
         'standard_name': 'time',
         'units': 'seconds since 1970-01-01T00:00:00.000000Z',
-        'calendar': 'gregorian',
+        'calendar': 'Gregorian',
         'comment': ('Derived from the instrument internal clock. Note, instrument clocks are subject to drift over '
                     'the course of a deployment. The data should be checked against other sensors to determine if '
                     'drift and offset corrections to the instrument clock are applicable.')
@@ -315,6 +339,9 @@ attributes = {
     }
 }
 
+# set expected frequency counts (used to trap misconfigured sensors)
+EXPECTED_FREQUENCY_COUNT = {'EK60': 3, 'EK80': 3, 'AZFP': 4}
+
 
 def set_file_name(site, dates):
     """
@@ -331,8 +358,8 @@ def set_file_name(site, dates):
 
 def ax_config(ax, frequency):
     """
-    Configure axis elements for the echogram, setting title, date formatting
-    and direction of the y-axis
+    Configure axis elements for the echogram: title, y-axis label and date
+    formatting of the x-axis.
 
     :param ax: graphics handle to the axis object.
     :param frequency: acoustic frequency of the data plotted in this axis.
@@ -349,7 +376,7 @@ def ax_config(ax, frequency):
 
 
 def generate_echogram(data, site, long_name, deployed_depth, output_directory, file_name, dates,
-                      vertical_range=None, colorbar_range=None):
+                      vertical_range=None, colorbar_range=None, colormap='cmo.balance'):
     """
     Generates and saves to disk an echogram of the acoustic volume backscatter
     for each of the frequencies.
@@ -362,7 +389,9 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     :param file_name: file name to use for the echogram.
     :param dates: date range to plot, sets the x-axis.
     :param vertical_range: vertical range to plot, sets the y-axis.
-    :param colorbar_range: colorbar range to plot, sets the colormap.
+    :param colorbar_range: colorbar range to plot, sets the colormap limits.
+    :param colormap: name of a colormap registered with matplotlib (e.g.
+        'magma', or 'cmo.balance' from cmocean); defaults to 'cmo.balance'.
     :return None: generates and saves an echogram to disk.
     """
     # setup defaults based on inputs
@@ -394,8 +423,8 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
         y_min = vertical_range[0]
         y_max = vertical_range[1]
 
-    # set the color map to "balance" from cmocean and set the c_min and c_max from the colorbar range
-    my_cmap = cmocean.cm.balance
+    # set the color map from its registered name and set the c_min and c_max from the colorbar range
+    my_cmap = matplotlib.colormaps[colormap]
     if not colorbar_range:
         v_min = None  # colorbar range will be set by the range in the data
         v_max = None
@@ -438,6 +467,7 @@ def generate_echogram(data, site, long_name, deployed_depth, output_directory, f
     # save the echogram
     echogram_name = file_name + '.png'
     plt.savefig(os.path.join(output_directory, echogram_name), dpi=150, bbox_inches='tight')
+    plt.close(fig)
 
 
 def range_correction(data, tilt_correction):
@@ -454,13 +484,17 @@ def range_correction(data, tilt_correction):
 
 def normalize_date_range(dates):
     """
-    Normalize the user-supplied date range into a (start, stop) pair of
-    YYYYMMDD strings, where stop is an exclusive upper bound (i.e. the
-    range covers [start, stop], matching the convention used by the
-    weekly batch scripts). Handles three input shapes:
+    Normalize the user-supplied date range into a [start, stop] pair of
+    YYYYMMDD strings, where stop is exclusive (the range runs up to, but
+    not including, stop), matching the convention used by the weekly
+    batch scripts. Handles three input shapes:
       - a single YYYYMMDD day        -> (day, day + 1)
       - a single YYYYMM month        -> (first-of-month, first-of-next-month)
-      - two explicit start/stop tokens (YYYYMMDD or YYYYMM), used as-is
+      - two tokens of the same length:
+          YYYYMMDD YYYYMMDD -> used as-is (stop exclusive)
+          YYYYMM   YYYYMM   -> (first of start month, first of the month
+                               after stop), so the stop month is included
+    Mixed-length tokens raise a ValueError.
 
     Idempotent: calling this again on an already-normalized pair is a no-op,
     so it is safe to call from multiple entry points.
@@ -473,6 +507,9 @@ def normalize_date_range(dates):
             dates = [dates[0], dates[0]]
         else:
             dates = [dates[0], (dparser.parse(dates[0]) + timedelta(days=1)).strftime('%Y%m%d')]
+
+    if len(dates[0]) != len(dates[1]) or len(dates[0]) not in (6, 8):
+        raise ValueError(f'Date range tokens must both be YYYYMMDD or both be YYYYMM, got {dates}')
 
     if len(dates[0]) == 6:
         dates[0] = dates[0] + '01'
@@ -524,10 +561,19 @@ def ek_file_list(data_directory, dates):
     edate = dparser.parse(dates[1]) - timedelta(days=1)
     delta = edate - sdate
 
+    normalized = os.path.normpath(data_directory)
+    base_year = os.path.basename(normalized)
+    year_scoped = base_year.isdigit() and len(base_year) == 4
+    parent_dir = os.path.dirname(normalized)
+
     file_list = []
     for i in range(delta.days + 1):
         day = sdate + timedelta(days=i)
-        ek_files = glob.glob(os.path.join(data_directory, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
+        if year_scoped and day.strftime('%Y') != base_year:
+            search_dir = os.path.join(parent_dir, day.strftime('%Y'))
+        else:
+            search_dir = data_directory
+        ek_files = glob.glob(os.path.join(search_dir, day.strftime('%m'), day.strftime('%d')) + '/*.raw')
         file_list.append(ek_files)
 
     return file_list
@@ -692,16 +738,12 @@ def _previous_day_last_file(data_directory, start_date_str, zpls_model):
     else:
         # EK60/EK80's directory structure is year-scoped. If the requested
         # range starts on Jan 1st, the previous day (Dec 31) falls in a
-        # different year, swap the year component.
-        current_year = start_date_str[:4]
+        # different year, check and swap the year component.
+        normalized = os.path.normpath(data_directory)
+        base_year = os.path.basename(normalized)
         prev_year = prev_day.strftime('%Y')
-        if prev_year != current_year:
-            normalized = os.path.normpath(data_directory)
-            if os.path.basename(normalized) == current_year:
-                search_dir = os.path.join(os.path.dirname(normalized), prev_year)
-            else:
-                # data_directory doesn't end in the expected current year
-                return None
+        if base_year.isdigit() and len(base_year) == 4 and prev_year != base_year:
+            search_dir = os.path.join(os.path.dirname(normalized), prev_year)
         else:
             search_dir = data_directory
         pattern = os.path.join(search_dir, prev_day.strftime('%m'), prev_day.strftime('%d')) + '/*.raw'
@@ -718,19 +760,10 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     Processes one calendar day at a time rather than the whole requested
     date range at once: converts, writes that day's full-resolution NetCDF,
     resamples, and releases the full-resolution data from memory before
-    moving to the next day. This avoids holding an entire multi-day chunk's
-    worth of converted data in memory simultaneously (observed to reach
-    70-177GB per worker on chunks with ~30+ EK80 files/week).
-
-    Each day's resample pass includes a forward buffer -- the leading files
-    of the NEXT day, already within the requested date range -- so the density
-    of the final bin spanning midnight is computed correctly rather than
-    truncated. The buffer never appears in a day's full-resolution NetCDF
-    output, and any resulting bin timestamped on the next day is trimmed
-    before this day's averaged result is kept, so nothing leaks forward and
-    the next day is not shorted when its own turn comes. The last day of the
-    requested range gets no forward buffer, matching how chunks already run
-    independently of neighboring chunks today.
+    moving to the next day. Each day's resample pass includes a backward
+    buffer so the first bin, which spans midnight, sees the previous day's
+    last pings, and a forward buffer so gap interpolation at the end of the
+    day has data on both sides.
 
     :param site: Site name where the data was collected.
     :param data_directory: Source directory where the raw data files are
@@ -751,7 +784,7 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     :param resample_freq: pandas resample offset alias, '15Min' or '60Min'.
     :param time_shift: pd.Timedelta bin-centering shift applied before
         resampling.
-    :param max_gap: pandas offset alias string passed to interpolate_na's
+    :param max_gap: pandas offset alias string passed to interpolate_na
         max_gap, e.g. '45Min' or '180Min'.
     :return: (avg_chunk, nc_files) where avg_chunk is the concatenated,
         gap-interpolated averaged xarray Dataset for the whole date range
@@ -784,10 +817,7 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         return None, []
 
     # the very first day of the range has no preceding day inside by_day to
-    # borrow a backward buffer from (that only ever contains days WITHIN the
-    # requested range) -- look one calendar day earlier on disk directly,
-    # using the range's actual start date, not day_keys[0] (which could
-    # differ if the first requested day itself had zero files of its own)
+    # borrow a backward buffer from -- look one calendar day earlier
     range_start = normalize_date_range(list(dates))[0]
     first_day_backward_file = _previous_day_last_file(data_directory, range_start, zpls_model)
 
@@ -800,11 +830,7 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         next_day_files = by_day[day_keys[i + 1]] if i + 1 < len(day_keys) else []
         forward_buffer = _forward_buffer_files(next_day_files, resample_freq)
 
-        # backward buffer: always pull the immediately preceding file, whole --
-        # file durations vary, and we can't cheaply know whether a file spans
-        # into this day without converting it, so we always include the prior
-        # file and let the ping_time-based masks below sort out what actually
-        # belongs to this day vs. was already written out by the previous one
+        # backward buffer: always pull the immediately preceding file
         if i == 0:
             backward_buffer = [first_day_backward_file] if first_day_backward_file else []
         else:
@@ -817,8 +843,8 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
                 for f in tqdm(combined_files, desc=desc)]
         echo = [e for e in echo if e is not None]
         if not echo:
-            # this day (including its buffer) produced no usable data -- skip it
-            # and move on
+            print(f'{day_key}: no usable data from {len(combined_files)} file(s) '
+                  f'({len(day_files)} own-day), skipping day.', flush=True)
             continue
 
         try:
@@ -826,8 +852,8 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         except ValueError:
             day_ds = xr.concat(echo, dim='ping_time', join='outer', combine_attrs='override')
             if 'ping_time' in day_ds.echo_range.indexes.keys():
-                day_ds['echo_range'] = day_ds['echo_range'].sel(ping_time=day_ds.ping_time[0], drop=True)
-                day_ds['nominal_depth'] = day_ds['nominal_depth'].sel(ping_time=day_ds.ping_time[0], drop=True)
+                day_ds['echo_range'] = day_ds['echo_range'].max(dim='ping_time', skipna=True)
+                day_ds['nominal_depth'] = day_ds['nominal_depth'].max(dim='ping_time', skipna=True)
         del echo
 
         day_ds = day_ds.sortby('ping_time')
@@ -843,13 +869,15 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         day_ds['frequency_nominal'] = day_ds['frequency_nominal'].astype(np.float32)
         day_ds['Sv'] = day_ds['Sv'].astype(np.float32)
 
-        # split off exactly this day's own records (excludes buffer) for the
-        # full-resolution NetCDF write -- the buffer is only ever used to
-        # compute the boundary average bin correctly, never written to the
-        # full-res daily file
+        # split off this day's own records (excludes buffer) for the full-resolution NetCDF write
         day_start = datetime.strptime(day_key, '%Y%m%d')
         day_end = day_start + timedelta(days=1)
         own_day_mask = (day_ds.ping_time >= np.datetime64(day_start)) & (day_ds.ping_time < np.datetime64(day_end))
+        if not own_day_mask.any():
+            print(f'{day_key}: none of the {len(day_files)} own-day file(s) produced usable data, '
+                  f'skipping day.', flush=True)
+            del day_ds
+            continue
         day_only_ds = day_ds.isel(ping_time=own_day_mask.values)
 
         day_nc_path = nc_file + "_Full_%s.nc" % day_key
@@ -863,16 +891,10 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         nc_files.append(day_nc_path)
         del write_ds
 
-        # resample using the FULL day_ds (backward buffer + own day + forward
+        # resample using the full day (backward buffer + current day + forward
         # buffer) so both the first bin (which may start before midnight, if
         # a file recorded late the previous day ran over) and the last bin
-        # (which spans into the next day) are computed correctly, then trim
-        # to exactly this day's own time range before keeping the averaged
-        # result -- NaN trimming (dropna) is intentionally deferred until all
-        # days are concatenated below, matching the original single-pass
-        # behavior; doing it per-day let each day keep a different subset of
-        # range_sample bins (their echo_range NaN positions can differ
-        # slightly day to day), which broke alignment across days later
+        # (which may span into the next day) are computed correctly
         resample_ds = day_ds.copy()
         resample_ds['ping_time'] = resample_ds['ping_time'] + time_shift
         day_avg = resample_ds.resample(ping_time=resample_freq).mean(dim='ping_time', skipna=True, keep_attrs=True)
@@ -880,11 +902,9 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
         day_avg = day_avg.compute()
         day_avg = day_avg.sel(ping_time=(day_avg.ping_time >= np.datetime64(day_start))
                                        & (day_avg.ping_time < np.datetime64(day_end)))
-
         daily_averages.append(day_avg)
 
-        # release the expensive full-resolution data for this day before
-        # moving on -- this is the actual memory fix
+        # release the expensive full-resolution data for this day before moving on
         del day_ds, day_only_ds, resample_ds
         n = 1
         while n > 0:
@@ -893,15 +913,15 @@ def process_sonar_data(site, data_directory, output_directory, dates, zpls_model
     if not daily_averages:
         return None, nc_files
 
-    # concatenate the per-day averaged datasets the same way individual files
-    # are combined within a day
+    # concatenate the per-day averaged datasets the same way individual files are combined within a day
     try:
         avg_chunk = xr.combine_by_coords(daily_averages, join='outer', combine_attrs='override')
-    except ValueError:
+    except ValueError as e:
         avg_chunk = xr.concat(daily_averages, dim='ping_time', join='outer', combine_attrs='override')
+        print(f'  combine_by_coords FAILED, used concat fallback: {e}', flush=True)
         if 'ping_time' in avg_chunk.echo_range.indexes.keys():
-            avg_chunk['echo_range'] = avg_chunk['echo_range'].sel(ping_time=avg_chunk.ping_time[0], drop=True)
-            avg_chunk['nominal_depth'] = avg_chunk['nominal_depth'].sel(ping_time=avg_chunk.ping_time[0], drop=True)
+            avg_chunk['echo_range'] = avg_chunk['echo_range'].max(dim='ping_time', skipna=True)
+            avg_chunk['nominal_depth'] = avg_chunk['nominal_depth'].max(dim='ping_time', skipna=True)
 
     avg_chunk = avg_chunk.sortby('ping_time')
     _, index = np.unique(avg_chunk['ping_time'], return_index=True)
@@ -930,8 +950,8 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     :param tilt_correction: Tilt of the sonar transducers (typically 15
         degrees for the uncabled sensors to avoid interference from the
         riser elements).
-    :return: Converted and processed bioacoustic sonar data in a xarray
-        dataset object.
+    :return: Converted and processed bioacoustic sonar data in an xarray
+        Dataset, or None if the file could not be converted or processed.
     """
     # convert and process the raw files using echopype
     env_params = {
@@ -942,15 +962,10 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     depth_offset = site_config[site]['depth_offset']  # height of sensor relative to site depth
     downward = site_config[site]['instrument_orientation'] == 'down'  # instrument orientation
 
-    # load the raw file, creating a xarray dataset object
+    # load the raw file, creating an xarray dataset object
     try:
-        # if this file was already converted (e.g. it's a boundary file that
-        # was already processed as the previous day's own/forward-buffer
-        # file, and is now being reprocessed as the next day's backward
-        # buffer), read the existing converted store instead of reparsing
-        # the raw file -- also avoids a second to_zarr/to_netcdf write below
-        # against a path that already exists (overwrite=False there is not
-        # confirmed to silently no-op on an existing store)
+        # if this file was already converted, read the existing converted store
+        # instead of reparsing the raw file
         stem = Path(file).stem
         converted_ext = '.zarr' if zpls_model == 'EK80' else '.nc'
         converted_path = Path(output_directory) / (stem + converted_ext)
@@ -978,46 +993,86 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     # process the data, calculating the volume acoustic backscatter strength and the vertical range
     waveform = 'CW'  # defaults for the EK60 and EK80
     encode = 'power'
-    if zpls_model == 'EK80':
-        # setting as defaults for the EK80 (note, this only support narrowband processing at this time)
-        try:
+    try:
+        if zpls_model == 'EK80':
+            # determining waveform and encoding methods from the data (accounting for 3 different configuration modes)
+            beam_grp = ds['Sonar/Beam_group1']
+            has_complex = (beam_grp is not None and 'backscatter_i' in beam_grp.data_vars
+                          and bool(beam_grp['backscatter_i'].notnull().any()))
+
+            # determine if any channels are broadband, and if so drop them
+            if has_complex and beam_grp is not None and 'transmit_type' in beam_grp.data_vars:
+                tt = beam_grp['transmit_type'].values
+                is_cw = np.array(['LFM' not in set(row) for row in tt])
+
+                if not is_cw.all():
+                    # drop LFM/broadband channels
+                    cw_channels = beam_grp['channel'].values[is_cw].tolist()
+                    if not cw_channels:
+                        print(f'{file}: all channels are LFM/broadband, no usable CW data, end processing.')
+                        del ds
+                        return None
+                    original_source_file = ds.source_file  # combine_echodata loses this -- restore below
+                    ds = ep.combine_echodata([ds], channel_selection=cw_channels)
+                    ds.source_file = original_source_file
+                    beam_grp = ds['Sonar/Beam_group1']
+
+                # clean up transmit_type NaN-padding on the retained channels
+                tt_cw = beam_grp['transmit_type']
+                valid_ping = (tt_cw != 'nan').any(dim='channel').compute()
+                beam_trimmed = beam_grp.isel(ping_time=valid_ping.values)
+                tt_fixed = xr.where(beam_trimmed['transmit_type'] == 'nan', 'CW',
+                                     beam_trimmed['transmit_type'])
+                beam_trimmed = beam_trimmed.assign(transmit_type=tt_fixed)
+                ds['Sonar/Beam_group1'] = beam_trimmed
+                beam_grp = ds['Sonar/Beam_group1']
+
+            # set the encoding type and compute the Sv
+            encode = 'complex' if has_complex else 'power'
             ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
-        except Exception as e:
-            print(f'Unit might be running in broadband mode (error: {e}), end processing.')
-            # manual garbage collection; echopype seems to leave a lot of detritus behind it
-            del ds
-            n = 1
-            while n > 0:
-                n = gc.collect()
 
-            return None
-    elif zpls_model == 'EK60':
-        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
-    else:
-        # AZFP processing, no waveform or encoding required
-        ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)
+            # check the number of output channels are as expected
+            expected_channels = beam_grp.sizes.get('channel', 0)
+            if ds_sv.sizes.get('channel', 0) != expected_channels:
+                print(f'{file}: compute_Sv returned {ds_sv.sizes.get("channel", 0)} channels, '
+                      f'expected {expected_channels}, end processing.')
+                del ds
+                return None
+        elif zpls_model == 'EK60':
+            ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params, waveform_mode=waveform, encode_mode=encode)
+        else:
+            # AZFP processing, no waveform or encoding required
+            ds_sv = ep.calibrate.compute_Sv(ds, env_params=env_params)
 
-    # Correct reversed ping times
-    if exist_reversed_time(ds_sv, "ping_time"):
-        # Coerce increasing time
-        coerce_increasing_time(ds_sv)
+        # Correct reversed ping times
+        if exist_reversed_time(ds_sv, "ping_time"):
+            # Coerce increasing time
+            coerce_increasing_time(ds_sv)
 
-    # calculate the depth from the range
-    ds_sv = ep.consolidate.add_depth(ds_sv, ds, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
+        # calculate the depth from the range
+        ds_sv = ep.consolidate.add_depth(ds_sv, ds, depth_offset=depth_offset, tilt=tilt_correction, downward=downward)
 
-    # add the split-beam angle -- only meaningful for EK60/EK80
-    if zpls_model in ('EK60', 'EK80'):
-        ds_sv = ep.consolidate.add_splitbeam_angle(ds_sv, ds, waveform_mode=waveform, encode_mode=encode,
-                                                    to_disk=False)
+        # add the split-beam angle -- only meaningful for EK60/EK80
+        if zpls_model in ('EK60', 'EK80'):
+            ds_sv = ep.consolidate.add_splitbeam_angle(ds_sv, ds, waveform_mode=waveform, encode_mode=encode,
+                                                        to_disk=False)
 
-    # convert the channel dimension to frequency
-    ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
+        # convert the channel dimension to frequency
+        ds_sv = ep.consolidate.swap_dims_channel_frequency(ds_sv)
+    except Exception as e:
+        # any failure here skips only this file, not the whole chunk
+        print(f'{file}: processing failed (error: {e}), end processing.')
+        # manual garbage collection; echopype seems to leave a lot of detritus behind it
+        del ds
+        n = 1
+        while n > 0:
+            n = gc.collect()
+        return None
 
     # extract the Sv, range and depth data
     data = ds_sv[['Sv', 'echo_range', 'depth']]
 
     # save the data to disk, skipping if this file was already converted
-    # (already_converted was determined above, before this file was opened)
     if not already_converted:
         if zpls_model == 'EK80':
             # output the files to Zarr (while larger than the NetCDF, faster for the EK80 files)
@@ -1034,10 +1089,10 @@ def _process_file(file, site, output_directory, zpls_model, xml_file, tilt_corre
     # rework the extracted dataset to make it easier to work with in further processing
     # --- convert range to a coordinate
     data['range_sample'] = data['range_sample'].astype(np.int32)  # convert the data type for range_sample
-    data['echo_range'] = data['echo_range'].sel(ping_time=data.ping_time[0], drop=True)
-    data = data.set_coords('echo_range')  # setup range as a coordinate variable
+    data['echo_range'] = data['echo_range'].max(dim='ping_time', skipna=True)
+    data = data.set_coords('echo_range')  # set up range as a coordinate variable
     # --- convert depth to a coordinate
-    data['depth'] = data['depth'].sel(ping_time=data.ping_time[0], drop=True)
+    data['depth'] = data['depth'].max(dim='ping_time', skipna=True)
     data = data.set_coords('depth')  # setup depth as a coordinate variable
     data = data.rename({'depth': 'nominal_depth'})
 
@@ -1080,11 +1135,20 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
     :kwargs colorbar_range: Volume acoustic backscatter strength range to
         use for the colorbar
     """
-    # assign the keyword arguments (defaults to None of not set)
+    # assign the keyword arguments, falling back to the site configuration when not set
+    cfg = site_config[site]
     tilt_correction = kwargs.get('tilt_correction')
+    if tilt_correction is None:
+        tilt_correction = cfg['tilt_correction']
     deployed_depth = kwargs.get('deployed_depth')
+    if deployed_depth is None:
+        deployed_depth = cfg['deployed_depth']
     vertical_range = kwargs.get('vertical_range')
+    if vertical_range is None:
+        vertical_range = cfg['vertical_range']
     colorbar_range = kwargs.get('colorbar_range')
+    if colorbar_range is None:
+        colorbar_range = cfg['colorbar_range']
 
     # normalize the date range (handles single-day, single-month, and explicit
     # start/stop input) before dates[1] is accessed below
@@ -1105,9 +1169,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
 
     file_name = set_file_name(site, dates)
 
-    # decide resample parameters before processing -- resampling now happens
-    # per-day inside process_sonar_data rather than once over the whole chunk
-    # afterward, so these need to be known up front
+    # decide resample parameters before processing
     if 'HYPM' in site:
         resample_freq = '60Min'
         time_shift = pd.to_timedelta(30, unit="min")
@@ -1129,10 +1191,19 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
               f'data files (or whether these were broadband files) for dates between {dates[0]} and {dates[1]}.')
         return None
 
+    # catch a channel-count mismatch (happens when only 1 or 2 frequencies is present)
+    expected_count = EXPECTED_FREQUENCY_COUNT.get(zpls_model)
+    actual_count = avg.sizes.get('frequency_nominal')
+    if expected_count is not None and actual_count != expected_count:
+        print(f'Only {actual_count} of the expected {expected_count} frequency channels reported valid data for '
+            + f'dates between {dates[0]} and {dates[1]} (frequencies present: {list(avg.frequency_nominal.values)}). '
+            + f'Skipping echogram generation.')
+        return None
+
     # generate the echogram
     long_name = site_config[site]['long_name']
     generate_echogram(avg, site, long_name, deployed_depth, output_directory, file_name, dates,
-                      vertical_range=vertical_range, colorbar_range=colorbar_range)
+                      vertical_range=vertical_range, colorbar_range=colorbar_range, colormap=cfg['colormap'])
 
     # add the OOI logo as a watermark
     echogram = os.path.join(output_directory, file_name + '.png')
@@ -1160,6 +1231,7 @@ def zpls_echogram(site, data_directory, output_directory, dates, zpls_model, xml
 
     avg_file = nc_file + '_Averaged.nc'
     avg.to_netcdf(avg_file, mode='w', format='NETCDF4', engine='h5netcdf')
+    return None
 
 
 def main(argv=None):
@@ -1204,22 +1276,9 @@ def main(argv=None):
     if xml_file:
         xml_file = os.path.abspath(xml_file)
 
-    # assign per site variables
-    if site in site_config:
-        # if tilt_correction flag is not set, set the tilt correction from the site configuration
-        if tilt_correction is None:
-            tilt_correction = site_config[site]['tilt_correction']
-        # if deployed_depth flag is not set, set the deployed_depth from the site configuration
-        if deployed_depth is None:
-            deployed_depth = site_config[site]['deployed_depth']
-        # if colorbar_range flag is not set, set the colorbar_range from the site configuration
-        if colorbar_range is None:
-            colorbar_range = site_config[site]['colorbar_range']
-        # if vertical_range flag is not set, set the vertical_range from the site configuration
-        if vertical_range is None:
-            vertical_range = site_config[site]['vertical_range']
-    elif site is not None:
-        raise parser.error('The site name was not found in the configuration dictionary.')
+    # make sure the site is one we have a configuration for (per-site defaults are applied in zpls_echogram)
+    if site not in site_config:
+        parser.error('The site name was not found in the configuration dictionary.')
 
     # make sure the root output directory exists
     if not os.path.isdir(output_directory):
